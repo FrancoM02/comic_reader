@@ -30,3 +30,11 @@ Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página s
 
 - [ ] **Spec §9.3 (iPhone):** subí un CBR de ~150 MB y un PDF de ~150 MB. **Criterio:** la pestaña no se recarga y la cantidad de páginas es correcta. Si falla, anotarlo: el plan alternativo es "subir archivos grandes desde la PC".
 - [ ] **RAR en build de producción:** `#/dev/extract` solo prueba la rama de desarrollo del worker. Corré `npm run build && npm run preview` (o probá en el sitio desplegado cuando la Tarea 7 tenga la subida) con un CBR RAR4 y uno RAR5. **Criterio:** se extraen con la cantidad y orden correctos (el worker y el .wasm se sirven desde `libarchive/`).
+
+## Subida de tomos (Tarea 7)
+
+- [ ] **Subida desde la PC:** en `#/upload` elegí (o arrastrá) un CBZ, confirmá serie y número y tocá "Subir". **Criterio:** en Drive existe `ComicReader/volumes/<id>/0001.jpg…` con `thumb.jpg`, y `library.json` tiene el tomo.
+- [ ] **Subida desde el teléfono:** repetí con el selector de archivos. **Criterio:** igual resultado, sin recargas de la pestaña.
+- [ ] **Corte a mitad de subida:** empezá una subida y cerrá la pestaña a la mitad. Al reabrir la app. **Criterio:** aparece "La subida de X se cortó, elegí el archivo de nuevo" y la carpeta parcial desaparece de Drive.
+- [ ] **Duplicado:** subí otra vez el mismo número de la misma serie. **Criterio:** aparece "Reemplazar / Subir igual / Cancelar"; "Reemplazar" deja un solo tomo y borra la carpeta vieja en Drive.
+- [ ] **Sesión vencida:** con la sesión vencida a mitad de subida. **Criterio:** mensaje "Tu sesión venció — tocá para renovar y volvé a subir el archivo".
