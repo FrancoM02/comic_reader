@@ -78,7 +78,65 @@ describe('useProgressSync', () => {
     const { result } = await setup();
     act(() => result.current.seen(2));
     await act(async () => { vi.advanceTimersByTime(3000); });
-    for (const c of store.saveProgress.mock.calls) expect(c[1].maxPage).toBeGreaterThanOrEqual(5);
+    expect(store.saveProgress).not.toHaveBeenCalled();
+  });
+
+  it('salto con el slider y vuelta antes de 2 s: no cuenta como leído', async () => {
+    const { result } = await setup();
+    act(() => result.current.jumped(9));
+    await act(async () => { vi.advanceTimersByTime(1500); });
+    act(() => result.current.jumped(3));
+    await act(async () => { vi.advanceTimersByTime(10000); });
+    expect(store.saveProgress).not.toHaveBeenCalled();
+  });
+
+  it('salto con el slider y quedarse 2 s: cuenta como leído', async () => {
+    const { result } = await setup();
+    act(() => result.current.jumped(8));
+    await act(async () => { vi.advanceTimersByTime(1999); });
+    act(() => {});
+    await act(async () => { vi.advanceTimersByTime(1 + 3000); });
+    expect(store.saveProgress).toHaveBeenCalledTimes(1);
+    expect(store.saveProgress.mock.calls[0][1]).toMatchObject({ maxPage: 8 });
+  });
+
+  it('un paso de página normal cancela el salto pendiente', async () => {
+    const { result } = await setup();
+    act(() => result.current.jumped(9));
+    act(() => result.current.seen(6));
+    await act(async () => { vi.advanceTimersByTime(10000); });
+    expect(store.saveProgress).toHaveBeenCalledTimes(1);
+    expect(store.saveProgress.mock.calls[0][1]).toMatchObject({ maxPage: 6, finished: false });
+  });
+
+  it('reset durante un guardado en curso espera a que termine y gana el reset', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    store.saveProgress.mockImplementationOnce(() => new Promise<void>((r) => (release = () => { order.push('save'); r(); })));
+    const reset = store.resetProgress.getMockImplementation() as (id: string, total: number) => Promise<void>;
+    store.resetProgress.mockImplementation(async (...a: [string, number]) => { order.push('reset'); await reset(...a); });
+    const { result } = await setup();
+    act(() => result.current.seen(8));
+    await act(async () => { vi.advanceTimersByTime(3000); });
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.reset(); });
+    await act(async () => {});
+    expect(store.resetProgress).not.toHaveBeenCalled();
+    await act(async () => { release(); await pending; });
+    expect(order).toEqual(['save', 'reset']);
+    act(() => result.current.seen(1));
+    await act(async () => { vi.advanceTimersByTime(3000); });
+    expect(store.saveProgress.mock.calls.at(-1)![1]).toMatchObject({ maxPage: 1, resetGen: 2 });
+  });
+
+  it('si el reset falla, rechaza y el estado local no cambia', async () => {
+    store.resetProgress.mockRejectedValueOnce(new Error('red'));
+    const { result } = await setup();
+    act(() => result.current.seen(7));
+    await act(async () => { await expect(result.current.reset()).rejects.toThrow('red'); });
+    act(() => result.current.seen(6));
+    await act(async () => { vi.advanceTimersByTime(3000); });
+    expect(store.saveProgress.mock.calls.at(-1)![1]).toMatchObject({ maxPage: 7, resetGen: 1 });
   });
 
   it('guarda al pasar a segundo plano y al desmontar', async () => {

@@ -104,5 +104,5 @@ export function useZoom(opts: { onTap: (x: number, width: number) => void; onSwi
     },
   };
 
-  return { view, handlers, zoomed: view.s > 1 };
+  return { view, handlers };
 }

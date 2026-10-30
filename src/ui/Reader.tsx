@@ -59,9 +59,14 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
   const last = visible[visible.length - 1];
   const atEnd = page !== null && last >= total - 1;
 
+  // Cambios de página justo después de un salto con el slider (incluido el scroll que provoca)
+  // no cuentan como leídos hasta quedarse 2 s (sync.jumped).
+  const jumpAt = useRef(0);
   useEffect(() => {
-    if (page !== null) sync.seen(last);
-  }, [page, last, sync.seen]);
+    if (page === null) return;
+    if (Date.now() - jumpAt.current < 500) sync.jumped(last);
+    else sync.seen(last);
+  }, [page, last, sync.seen, sync.jumped]);
 
   const want = useMemo(() => {
     const w = [...visible, cur - 1, ...near];
@@ -84,8 +89,10 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
 
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.key === 'Escape') location.hash = backHref;
+      if (e.key === 'Escape') {
+        if (menu) setMenu(false);
+        else location.hash = backHref;
+      } else if (e.target instanceof HTMLInputElement) return;
       else if (!vertical && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
         go((e.key === 'ArrowLeft') === (series.dir === 'rtl') ? 1 : -1);
@@ -93,7 +100,7 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
     };
     addEventListener('keydown', f);
     return () => removeEventListener('keydown', f);
-  }, [go, vertical, series.dir, backHref]);
+  }, [go, vertical, series.dir, backHref, menu]);
 
   // Vertical: la página actual es la que cruza el centro; se cargan las que se acercan.
   const scroller = useRef<HTMLDivElement>(null);
@@ -125,13 +132,27 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
   }, [vertical, ready]);
 
   const jump = (i: number) => {
+    jumpAt.current = Date.now();
     setPage(i);
     if (vertical) els.current[i]?.scrollIntoView();
   };
+  const [resetError, setResetError] = useState('');
   const restart = async () => {
+    setResetError('');
+    try {
+      await sync.reset();
+    } catch (e) {
+      setResetError(`No se pudo empezar de nuevo: ${e instanceof Error ? e.message : 'error desconocido'}`);
+      return;
+    }
     setMenu(false);
-    await sync.reset();
     jump(0);
+  };
+  const [scrub, setScrub] = useState<number | null>(null);
+  // En vertical la última página puede no llegar nunca al centro: el fondo del scroll la cuenta.
+  const onVScroll = (e: Event) => {
+    const el = e.currentTarget as HTMLElement;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) setPage(total - 1);
   };
 
   const list = sortVolumes(lib.volumes.filter((v) => v.seriesId === series.id));
@@ -171,7 +192,7 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
       {!ready ? (
         <p class="reader-msg">Cargando…</p>
       ) : vertical ? (
-        <div class="vstrip" ref={scroller} onClick={() => setMenu((m) => !m)}>
+        <div class="vstrip" ref={scroller} onScroll={onVScroll} onClick={() => setMenu((m) => !m)}>
           {volume.pageFileIds.map((_, i) => (
             <div class="vpage" key={i} data-i={i} ref={(el) => { els.current[i] = el; }}>
               {Math.abs(i - cur) <= 5 ? img(i) : <div class="pg-ph" />}
@@ -212,14 +233,18 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
           </div>
           <div class="reader-bottom">
             <label>
-              Página {last + 1} / {total}
+              Página {scrub ?? last + 1} / {total}
               <input
                 type="range"
                 min={1}
                 max={total}
-                value={cur + 1}
+                value={scrub ?? cur + 1}
                 dir={series.dir}
-                onInput={(e) => jump(Number((e.target as HTMLInputElement).value) - 1)}
+                onInput={(e) => setScrub(Number((e.target as HTMLInputElement).value))}
+                onChange={(e) => {
+                  setScrub(null);
+                  jump(Number((e.target as HTMLInputElement).value) - 1);
+                }}
               />
             </label>
             <div class="actions">
@@ -237,6 +262,7 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
                 Empezar de nuevo
               </button>
             </div>
+            {resetError && <p role="alert">{resetError}</p>}
           </div>
         </div>
       )}

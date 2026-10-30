@@ -4,6 +4,7 @@ import type { Store } from '../../store';
 import type { VolumeProgress } from '../../types';
 
 const DEBOUNCE_MS = 3000;
+const DWELL_MS = 2000;
 
 /** Dónde abrir: en maxPage; un tomo terminado abre en 0 (sin tocar el progreso guardado). */
 export function startPage(p: VolumeProgress | undefined, total: number): number {
@@ -30,24 +31,35 @@ type ProgressStore = Pick<Store, 'loadProgress' | 'saveProgress' | 'resetProgres
 
 /**
  * Carga el progreso de Drive al abrir y lo guarda 3 s después del último avance,
- * al pasar a segundo plano, en pagehide y al desmontar. `seen(i)` = última página mostrada.
+ * al pasar a segundo plano, en pagehide y al desmontar. `seen(i)` = última página leída;
+ * `jumped(i)` = salto con el slider, que cuenta como leída solo si se queda 2 s ahí.
+ * Los guardados y el reset de este hook van en serie.
  */
 export function useProgressSync(store: ProgressStore, volumeId: string, total: number) {
   const [start, setStart] = useState<number | null>(null);
   const [error, setError] = useState('');
-  const s = useRef({ remoteMax: 0, remoteFinished: false, maxSeen: 0, resetGen: 0, dirty: false, timer: 0 as ReturnType<typeof setTimeout> | 0 });
+  const s = useRef({
+    remoteMax: 0, remoteFinished: false, maxSeen: 0, resetGen: 0, dirty: false,
+    timer: 0 as ReturnType<typeof setTimeout> | 0,
+    dwell: 0 as ReturnType<typeof setTimeout> | 0,
+    queue: Promise.resolve() as Promise<unknown>,
+  });
 
   const flush = useCallback(() => {
     const st = s.current;
     if (st.timer) clearTimeout(st.timer);
     st.timer = 0;
-    if (!st.dirty) return;
-    st.dirty = false;
-    const p = savePayload({ ...st, total, now: Date.now(), deviceId: getDeviceId() });
-    st.remoteMax = p.maxPage;
-    st.remoteFinished = p.finished;
-    store.saveProgress(volumeId, p).catch(() => {
-      st.dirty = true; // se reintenta en el próximo guardado
+    st.queue = st.queue.then(async () => {
+      if (!st.dirty) return;
+      st.dirty = false;
+      const p = savePayload({ ...st, total, now: Date.now(), deviceId: getDeviceId() });
+      st.remoteMax = p.maxPage;
+      st.remoteFinished = p.finished;
+      try {
+        await store.saveProgress(volumeId, p);
+      } catch {
+        st.dirty = true; // se reintenta en el próximo guardado
+      }
     });
   }, [store, volumeId, total]);
 
@@ -69,11 +81,12 @@ export function useProgressSync(store: ProgressStore, volumeId: string, total: n
       alive = false;
       document.removeEventListener('visibilitychange', onHidden);
       removeEventListener('pagehide', flush);
+      if (s.current.dwell) clearTimeout(s.current.dwell);
       flush();
     };
   }, [store, volumeId, total, flush]);
 
-  const seen = useCallback(
+  const mark = useCallback(
     (page: number) => {
       const st = s.current;
       st.maxSeen = Math.max(st.maxSeen, page);
@@ -86,15 +99,44 @@ export function useProgressSync(store: ProgressStore, volumeId: string, total: n
     [flush, total],
   );
 
-  const reset = useCallback(async () => {
+  const seen = useCallback(
+    (page: number) => {
+      const st = s.current;
+      if (st.dwell) clearTimeout(st.dwell);
+      st.dwell = 0;
+      mark(page);
+    },
+    [mark],
+  );
+
+  const jumped = useCallback(
+    (page: number) => {
+      const st = s.current;
+      if (st.dwell) clearTimeout(st.dwell);
+      st.dwell = setTimeout(() => {
+        st.dwell = 0;
+        mark(page);
+      }, DWELL_MS);
+    },
+    [mark],
+  );
+
+  /** Rechaza si Drive falla; en ese caso el estado local no cambia. */
+  const reset = useCallback(() => {
     const st = s.current;
     if (st.timer) clearTimeout(st.timer);
-    Object.assign(st, { timer: 0, dirty: false, maxSeen: 0, remoteMax: 0, remoteFinished: false, resetGen: st.resetGen + 1 });
-    await store.resetProgress(volumeId, total);
-    // La resetGen real la decide Drive (otro dispositivo pudo resetear también).
-    const p = (await store.loadProgress()).volumes[volumeId];
-    if (p) st.resetGen = p.resetGen;
+    if (st.dwell) clearTimeout(st.dwell);
+    st.timer = st.dwell = 0;
+    const run = st.queue.then(async () => {
+      await store.resetProgress(volumeId, total);
+      Object.assign(st, { dirty: false, maxSeen: 0, remoteMax: 0, remoteFinished: false, resetGen: st.resetGen + 1 });
+      // La resetGen real la decide Drive (otro dispositivo pudo resetear también).
+      const p = (await store.loadProgress().catch(() => null))?.volumes[volumeId];
+      if (p) st.resetGen = p.resetGen;
+    });
+    st.queue = run.catch(() => {});
+    return run;
   }, [store, volumeId, total]);
 
-  return { start, error, seen, reset };
+  return { start, error, seen, jumped, reset };
 }
