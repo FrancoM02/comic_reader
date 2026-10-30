@@ -59,3 +59,15 @@ Seguí el checklist de [`docs/VERIFICACION.md`](docs/VERIFICACION.md), sobre tod
 - Navegadores normales: Google Identity Services (token client), con renovación silenciosa.
 - iPhone con la app instalada en la pantalla de inicio (`navigator.standalone`): flujo por redirección (implicit flow), porque el popup no funciona bien en ese modo. Al volver, la app restaura la pantalla en la que estabas.
 - Si algo de eso fallara en tu iPhone, la alternativa es usar la app desde Safari.
+
+## Probado en
+
+Resultados de las pruebas de riesgo en dispositivos reales. Completá la columna "Resultado" y las notas. Los pasos completos están en la sección (c) de [`docs/VERIFICACION.md`](docs/VERIFICACION.md).
+
+| Prueba | Dispositivo | Resultado | Notas |
+| --- | --- | --- | --- |
+| Memoria: CBR de ~150 MB | iPhone | | |
+| Memoria: PDF de ~150 MB | iPhone | | |
+| Cuotas: tomo de 200+ páginas | PC (Linux) | | |
+| Fluidez: cambio de página con 4G (9 de 10) | Celular con 4G | | |
+| Token: lector abierto más de 1 h | Celular | | |
