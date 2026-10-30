@@ -25,3 +25,8 @@ Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página s
 - [ ] **Miniaturas:** en todos los casos las miniaturas se ven nítidas y con la proporción correcta (esto cubre `makeThumb`, que no se puede probar en jsdom).
 - [ ] **Formato no soportado:** elegí un archivo `.txt`. **Criterio:** aparece "Error: Formato no soportado".
 - [ ] **Memoria (iPhone):** con un PDF o CBR de ~150 MB, la extracción termina sin que Safari recargue la pestaña.
+
+### Extracción: memoria y build de producción
+
+- [ ] **Spec §9.3 (iPhone):** subí un CBR de ~150 MB y un PDF de ~150 MB. **Criterio:** la pestaña no se recarga y la cantidad de páginas es correcta. Si falla, anotarlo: el plan alternativo es "subir archivos grandes desde la PC".
+- [ ] **RAR en build de producción:** `#/dev/extract` solo prueba la rama de desarrollo del worker. Corré `npm run build && npm run preview` (o probá en el sitio desplegado cuando la Tarea 7 tenga la subida) con un CBR RAR4 y uno RAR5. **Criterio:** se extraen con la cantidad y orden correctos (el worker y el .wasm se sirven desde `libarchive/`).

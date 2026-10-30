@@ -3,6 +3,7 @@ import { defineConfig, type Plugin } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 // El worker de libarchive carga su .wasm relativo a sí mismo: se emiten juntos.
 const libarchiveAssets = (): Plugin => ({
@@ -13,7 +14,7 @@ const libarchiveAssets = (): Plugin => ({
       this.emitFile({
         type: 'asset',
         fileName: `libarchive/${f}`,
-        source: readFileSync(`node_modules/libarchive.js/dist/${f}`),
+        source: readFileSync(fileURLToPath(new URL(`./node_modules/libarchive.js/dist/${f}`, import.meta.url))),
       });
     }
   },

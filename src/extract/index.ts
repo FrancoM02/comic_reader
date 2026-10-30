@@ -15,7 +15,7 @@ const THUMB_WIDTH = 400;
 export async function makeThumb(page: Blob): Promise<Blob> {
   const bmp = await createImageBitmap(page);
   try {
-    const w = THUMB_WIDTH;
+    const w = Math.min(THUMB_WIDTH, bmp.width);
     const h = Math.max(1, Math.round((bmp.height * w) / bmp.width));
     if (typeof OffscreenCanvas !== 'undefined') {
       const c = new OffscreenCanvas(w, h);
