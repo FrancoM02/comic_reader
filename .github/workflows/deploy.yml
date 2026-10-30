@@ -28,6 +28,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Verificar VITE_GOOGLE_CLIENT_ID
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID || secrets.VITE_GOOGLE_CLIENT_ID }}
+        run: |
+          if [ -z "$VITE_GOOGLE_CLIENT_ID" ]; then
+            echo "::error::Falta la variable VITE_GOOGLE_CLIENT_ID (Settings > Secrets and variables > Actions > Variables). Ver README."
+            exit 1
+          fi
       - run: npm run build
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID || secrets.VITE_GOOGLE_CLIENT_ID }}
