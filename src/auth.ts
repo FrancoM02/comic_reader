@@ -13,7 +13,56 @@ export interface TokenResult {
 export interface TokenTransport {
   request(interactive: boolean): Promise<TokenResult>;
   /** Si la página volvió de una redirección con token, lo devuelve (y limpia la URL). */
-  consumeReturn?(): TokenResult | null;
+  consumeReturn?(): TokenResult | { error: string } | null;
+  /** Empieza a cargar lo que haga falta para que el clic de signIn sea sincrónico hasta Google. */
+  preload?(): Promise<void>;
+  /** Renovación que navega la página (solo transporte por redirección). La página se va. */
+  navigateRefresh?(): void;
+}
+
+/** La renovación silenciosa no es posible: hace falta un toque del usuario. */
+export class AuthInteractionRequired extends Error {
+  constructor(message = 'Hace falta volver a iniciar sesión') {
+    super(message);
+    this.name = 'AuthInteractionRequired';
+  }
+}
+
+const NO_AUTO_KEY = 'cr.noAutoRefresh';
+const REFRESH_AHEAD_MS = 15 * 60_000;
+const SILENT_ERRORS = ['interaction_required', 'login_required', 'consent_required', 'account_selection_required'];
+
+let needsInteraction = false;
+let lastError: string | null = null;
+let busy = false;
+const listeners = new Set<() => void>();
+
+function notify() {
+  listeners.forEach((f) => f());
+}
+export function subscribeAuth(f: () => void): () => void {
+  listeners.add(f);
+  return () => listeners.delete(f);
+}
+/** true si la sesión venció y hay que tocar para renovar */
+export function needsRenewal(): boolean {
+  return needsInteraction;
+}
+export function lastAuthError(): string | null {
+  return lastError;
+}
+/** Los flujos largos (subidas) lo marcan para que no se renueve por redirección. */
+export function setBusy(b: boolean): void {
+  busy = b;
+}
+function flag(set?: boolean): boolean {
+  try {
+    if (set === true) localStorage.setItem(NO_AUTO_KEY, '1');
+    else if (set === false) localStorage.removeItem(NO_AUTO_KEY);
+    return localStorage.getItem(NO_AUTO_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 interface Stored {
@@ -22,7 +71,8 @@ interface Stored {
 }
 
 let transport: TokenTransport | null = null;
-let pending: Promise<string> | null = null;
+let pendingSilent: Promise<string> | null = null;
+let pendingInteractive: Promise<string> | null = null;
 
 function read(): Stored | null {
   try {
@@ -45,9 +95,22 @@ function store(r: TokenResult): string {
 
 export async function initAuth(clientId: string, t: TokenTransport = createTransport(clientId)): Promise<void> {
   transport = t;
-  pending = null;
+  pendingSilent = pendingInteractive = null;
+  needsInteraction = false;
+  lastError = null;
+  busy = false;
   const returned = t.consumeReturn?.();
-  if (returned) store(returned);
+  if (returned) {
+    if ('error' in returned) {
+      flag(true); // no reintentar solo hasta el próximo signIn interactivo
+      if (SILENT_ERRORS.includes(returned.error)) needsInteraction = true;
+      else lastError = returned.error;
+    } else {
+      store(returned);
+      flag(false);
+    }
+  }
+  t.preload?.().catch(() => {});
 }
 
 export function isSignedIn(): boolean {
@@ -56,15 +119,40 @@ export function isSignedIn(): boolean {
 
 function renew(interactive: boolean): Promise<string> {
   if (!transport) return Promise.reject(new Error('initAuth no fue llamado'));
-  if (!pending) {
-    pending = transport
-      .request(interactive)
-      .then(store)
+  if (interactive) {
+    flag(false);
+    pendingInteractive ??= transport
+      .request(true)
+      .then((r) => {
+        needsInteraction = false;
+        lastError = null;
+        notify();
+        return store(r);
+      })
       .finally(() => {
-        pending = null;
+        pendingInteractive = null;
       });
+    return pendingInteractive;
   }
-  return pending;
+  if (pendingInteractive) return pendingInteractive;
+  pendingSilent ??= transport
+    .request(false)
+    .then((r) => {
+      needsInteraction = false;
+      notify();
+      return store(r);
+    })
+    .catch((e) => {
+      if (e instanceof AuthInteractionRequired) {
+        needsInteraction = true;
+        notify();
+      }
+      throw e;
+    })
+    .finally(() => {
+      pendingSilent = null;
+    });
+  return pendingSilent;
 }
 
 export async function signIn(): Promise<void> {
@@ -76,6 +164,19 @@ export async function getToken(opts: { forceRefresh?: boolean } = {}): Promise<s
   if (!s) throw new Error('No hay sesión iniciada');
   if (!opts.forceRefresh && s.expiresAt - Date.now() > MARGIN_MS) return s.accessToken;
   return renew(false);
+}
+
+/** Renueva de forma proactiva si es seguro (sin trabajo en curso). Con redirección, la página se va. */
+export async function refreshIfIdle(): Promise<void> {
+  const s = read();
+  if (!s || !transport || busy || flag() || needsInteraction) return;
+  if (s.expiresAt - Date.now() >= REFRESH_AHEAD_MS) return;
+  if (transport.navigateRefresh) {
+    flag(true); // se limpia al volver con token; si vuelve con error, evita el bucle
+    transport.navigateRefresh();
+    return;
+  }
+  await getToken({ forceRefresh: true }).catch(() => {});
 }
 
 export function signOut(): void {
