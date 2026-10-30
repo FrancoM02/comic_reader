@@ -1,12 +1,29 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'node:fs';
+
+// El worker de libarchive carga su .wasm relativo a sí mismo: se emiten juntos.
+const libarchiveAssets = (): Plugin => ({
+  name: 'libarchive-assets',
+  apply: 'build',
+  generateBundle() {
+    for (const f of ['worker-bundle.js', 'libarchive.wasm']) {
+      this.emitFile({
+        type: 'asset',
+        fileName: `libarchive/${f}`,
+        source: readFileSync(`node_modules/libarchive.js/dist/${f}`),
+      });
+    }
+  },
+});
 
 export default defineConfig({
   base: './',
   plugins: [
     preact(),
+    libarchiveAssets(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png'],

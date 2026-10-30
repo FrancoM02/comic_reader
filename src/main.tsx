@@ -4,4 +4,10 @@ import { initAuth } from './auth';
 import { GOOGLE_CLIENT_ID } from './config';
 import './ui/styles.css';
 
-initAuth(GOOGLE_CLIENT_ID).finally(() => render(<App />, document.getElementById('app')!));
+const root = document.getElementById('app')!;
+
+if (import.meta.env.DEV && location.hash.startsWith('#/dev/extract')) {
+  import('./ui/DevExtract').then(({ DevExtract }) => render(<DevExtract />, root));
+} else {
+  initAuth(GOOGLE_CLIENT_ID).finally(() => render(<App />, root));
+}

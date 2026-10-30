@@ -13,3 +13,15 @@ Requiere el sitio desplegado en GitHub Pages y el client ID configurado (ver REA
 - [ ] **Salir:** tocá "Salir". **Criterio:** vuelve la pantalla "Entrar con Google".
 
 Si falla el caso de la pantalla de inicio incluso con el login por redirección, anotá qué pasó y la versión de iOS: la alternativa documentada es usar la app desde Safari.
+
+## Extracción de páginas (CBZ / CBR / PDF)
+
+Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página solo existe en desarrollo, no requiere iniciar sesión).
+
+- [ ] **CBZ:** elegí un CBZ real. **Criterio:** la cantidad de páginas coincide con la del archivo y las miniaturas salen en orden de lectura (1, 2, 10, no 1, 10, 2).
+- [ ] **CBR (RAR4):** elegí un CBR en formato RAR4. **Criterio:** misma cantidad y orden correctos.
+- [ ] **CBR (RAR5):** elegí un CBR en formato RAR5 (si tenés uno). **Criterio:** misma cantidad y orden correctos.
+- [ ] **PDF:** elegí un PDF. **Criterio:** una miniatura por página, en orden.
+- [ ] **Miniaturas:** en todos los casos las miniaturas se ven nítidas y con la proporción correcta (esto cubre `makeThumb`, que no se puede probar en jsdom).
+- [ ] **Formato no soportado:** elegí un archivo `.txt`. **Criterio:** aparece "Error: Formato no soportado".
+- [ ] **Memoria (iPhone):** con un PDF o CBR de ~150 MB, la extracción termina sin que Safari recargue la pestaña.
