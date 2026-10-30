@@ -45,3 +45,12 @@ Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página s
 - [ ] **Acciones de serie:** en una serie, renombrá, cambiá tipo/sentido/modo y borrá (con confirmación). **Criterio:** `library.json` en Drive refleja cada cambio; al borrar desaparecen las carpetas de los tomos.
 - [ ] **Acciones de tomo:** cambiá el número, movelo a otra serie, "Marcar como leído" / "Marcar como no leído" y borrá. **Criterio:** el estado se ve en la lista, `progress.json` cambia, y la etiqueta sigue el formato `vNN` / `#NNN`.
 - [ ] **Recarga al volver:** cambiá algo desde otro dispositivo y volvé a la pestaña. **Criterio:** la lista se actualiza sola.
+
+## Lector (Tarea 9)
+
+- [ ] **Progreso entre dispositivos:** leé un manga hasta la página 20 en la PC (esperá 3 s o cambiá de pestaña) y abrilo en el celular. **Criterio:** abre en la 20.
+- [ ] **El progreso no retrocede:** leé hasta la 40 en el celular y después cerrá la pestaña de la PC, que había quedado en la 20. Abrí de nuevo en cualquiera. **Criterio:** sigue en la 40.
+- [ ] **Doble página y sentido:** con la tablet acostada (ancho ≥ 900 px) abrí un manga `rtl`. **Criterio:** la portada va sola, después pares con la página impar a la derecha; tocar/deslizar/flechas avanzan hacia la izquierda.
+- [ ] **Zoom:** pellizcá y hacé doble toque sobre una página. **Criterio:** hace zoom y se puede mover; mientras hay zoom, deslizar no pasa de página.
+- [ ] **Modo vertical:** en una serie en modo vertical, scrolleá. **Criterio:** las imágenes cargan antes de llegar y "Página N / total" del menú (toque) sigue la del centro.
+- [ ] **Menú y fin:** tocá el centro: título, slider, tomo anterior/siguiente y "Empezar de nuevo" (vuelve a la 1 y en otro dispositivo el tomo figura sin empezar). Al llegar a la última página aparece "Siguiente tomo". Escape vuelve a la serie.

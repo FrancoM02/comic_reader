@@ -52,3 +52,29 @@ a { color: var(--accent); }
 .danger { background: #b3402f; }
 .volumes { list-style: none; padding: 0; }
 .volumes li { border-bottom: 1px solid #222; padding: 0.5rem 0; }
+
+/* Lector */
+.renew { position: fixed; top: 0; left: 0; right: 0; z-index: 30; margin: 0; padding: 0.5rem; background: #222; text-align: center; }
+.reader { position: fixed; inset: 0; z-index: 10; background: #000; color: #fff; overflow: hidden; user-select: none; -webkit-user-select: none; }
+.reader-msg { text-align: center; margin-top: 40vh; }
+.stage { position: absolute; inset: 0; touch-action: none; overflow: hidden; }
+.spread { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; transform-origin: center; }
+.spread.rtl { flex-direction: row-reverse; }
+.ppage { height: 100%; display: flex; align-items: center; justify-content: center; max-width: 100%; }
+.spread.two .ppage { max-width: 50%; }
+.spread.two .ppage:first-child { justify-content: flex-end; }
+.spread.two .ppage:last-child { justify-content: flex-start; }
+.ppage img { max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none; }
+.pg-ph { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; width: min(100vw, 800px); aspect-ratio: 2 / 3; max-height: 100%; color: #888; }
+.vstrip { position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y pinch-zoom; }
+.vpage { display: flex; justify-content: center; }
+.vpage img { width: 100%; max-width: 800px; display: block; }
+.reader-end { position: absolute; bottom: 1rem; left: 0; right: 0; display: flex; gap: 1rem; justify-content: center; align-items: center; pointer-events: none; }
+.reader-end > * { pointer-events: auto; }
+.reader-end span { background: rgba(0, 0, 0, 0.7); padding: 0.5rem 0.75rem; border-radius: 6px; }
+.reader-menu { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: space-between; }
+.reader-top, .reader-bottom { background: rgba(20, 20, 20, 0.92); padding: 0.75rem 1rem; }
+.reader-top { display: flex; gap: 1rem; align-items: center; }
+.reader-top a { font-size: 1.4rem; text-decoration: none; }
+.reader-bottom label { display: flex; flex-direction: column; gap: 0.5rem; }
+.reader-bottom input[type='range'] { width: 100%; }

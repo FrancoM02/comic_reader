@@ -3,6 +3,7 @@ import { createDrive } from './drive';
 import { createStore } from './store';
 import { SessionContext } from './session';
 import { Home } from './ui/Home';
+import { Reader } from './ui/Reader';
 import { SeriesView } from './ui/SeriesView';
 import { UploadView } from './ui/UploadView';
 import { cleanupOrphans } from './upload';
@@ -72,8 +73,9 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
     }
   }
 
+  const readId = hash.match(/^#\/read\/(.+)$/)?.[1];
   const banner = needsRenewal() && (
-    <p role="alert">
+    <p role="alert" class={readId ? 'renew' : undefined}>
       Tu sesión venció.{' '}
       <button type="button" onClick={entrar}>
         Tocá para renovar
@@ -106,7 +108,6 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
       );
     }
     const seriesId = hash.match(/^#\/series\/(.+)$/)?.[1];
-    const reading = hash.startsWith('#/read/');
     const extra = (
       <>
         {err}
@@ -123,11 +124,8 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
         <UploadView cleaned={cleaned} />
       ) : seriesId ? (
         <SeriesView id={decodeURIComponent(seriesId)} />
-      ) : reading ? (
-        <main class="home">
-          <a href="#/">← Biblioteca</a>
-          <p>Lector próximamente</p>
-        </main>
+      ) : readId ? (
+        <Reader key={readId} volumeId={decodeURIComponent(readId!)} />
       ) : (
         <Home extra={extra} />
       );
