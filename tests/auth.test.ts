@@ -160,3 +160,17 @@ test('signIn interactivo con una renovación silenciosa pendiente inicia su prop
   resolvers.forEach((r, i) => r({ accessToken: `t${i}`, expiresIn: 3600 }));
   await Promise.all([silent, inter]);
 });
+
+test('setBusy es un contador: sigue ocupado hasta que se libera cada llamada', async () => {
+  const nav = vi.fn();
+  await initAuth('cid', { request: vi.fn(), navigateRefresh: nav });
+  expiringSession();
+  setBusy(true);
+  setBusy(true);
+  setBusy(false);
+  await refreshIfIdle();
+  expect(nav).not.toHaveBeenCalled();
+  setBusy(false);
+  await refreshIfIdle();
+  expect(nav).toHaveBeenCalledTimes(1);
+});

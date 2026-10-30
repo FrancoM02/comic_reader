@@ -1,10 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setBusy } from '../src/auth';
+
+vi.mock('../src/auth', async (orig) => {
+  const a = await orig<typeof import('../src/auth')>();
+  return { ...a, setBusy: vi.fn(a.setBusy) };
+});
 import { cleanupOrphans, deleteSeries, deleteVolume, findDuplicate, uploadVolume } from '../src/upload';
 import { createStore } from '../src/store';
 import type { Drive, DriveFile } from '../src/drive';
 import type { Library, Volume } from '../src/types';
 
-type Node = { id: string; name: string; parent?: string; folder: boolean; data?: unknown };
+type Node = { id: string; name: string; parent?: string; folder: boolean; data?: unknown; createdTime?: string };
 
 function fakeDrive(opts: { delay?: boolean } = {}) {
   let n = 0;
@@ -14,7 +20,7 @@ function fakeDrive(opts: { delay?: boolean } = {}) {
     async findOrCreateFolder(name, parentId) {
       for (const x of nodes.values()) if (x.folder && x.name === name && x.parent === parentId) return x.id;
       const id = `id${++n}`;
-      nodes.set(id, { id, name, parent: parentId, folder: true });
+      nodes.set(id, { id, name, parent: parentId, folder: true, createdTime: new Date().toISOString() });
       return id;
     },
     async findFile(name, parentId) {
@@ -41,7 +47,7 @@ function fakeDrive(opts: { delay?: boolean } = {}) {
     },
     async downloadBlob() { return new Blob(); },
     async listChildren(folderId): Promise<DriveFile[]> {
-      return [...nodes.values()].filter((x) => x.parent === folderId).map((x) => ({ id: x.id, name: x.name, mimeType: x.folder ? 'application/vnd.google-apps.folder' : 'x' }));
+      return [...nodes.values()].filter((x) => x.parent === folderId).map((x) => ({ id: x.id, name: x.name, mimeType: x.folder ? 'application/vnd.google-apps.folder' : 'x', createdTime: x.createdTime }));
     },
     async deleteFile(id) {
       stats.deleted.push(id);
@@ -145,6 +151,40 @@ describe('uploadVolume', () => {
   });
 });
 
+describe('uploadVolume: errores', () => {
+  it('si falla una página, no empiezan más subidas y setBusy(false) va después de frenar todo', async () => {
+    const { deps } = await setup({ delay: true });
+    const calls: string[] = [];
+    const orig = deps.drive.uploadBlob;
+    let started = 0;
+    deps.drive.uploadBlob = async (name, ...a) => {
+      const n = ++started;
+      calls.push(name);
+      if (n === 2) throw new Error('boom');
+      return orig(name, ...a);
+    };
+    vi.mocked(setBusy).mockClear();
+    await expect(uploadVolume({ file, seriesId: 'S', newSeries: { name: 'A', kind: 'comic' }, number: 1, label: 'x' }, deps, () => {})).rejects.toThrow('boom');
+    const after = calls.length;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls.length).toBe(after);
+    expect(after).toBeLessThan(7);
+    expect(vi.mocked(setBusy).mock.calls.map((c) => c[0])).toEqual([true, false]);
+  });
+
+  it('si la carpeta desapareció antes de confirmar, falla y no toca library.json', async () => {
+    const { deps, store, nodes } = await setup();
+    const orig = deps.drive.uploadBlob;
+    deps.drive.uploadBlob = async (name, parent, b) => {
+      const id = await orig(name, parent, b);
+      if (name === 'thumb.jpg') nodes.delete(parent);
+      return id;
+    };
+    await expect(uploadVolume({ file, seriesId: 'S', newSeries: { name: 'A', kind: 'comic' }, number: 1, label: 'x' }, deps, () => {})).rejects.toThrow('desapareció');
+    expect((await store.loadLibrary()).volumes).toEqual([]);
+  });
+});
+
 describe('findDuplicate', () => {
   const lib: Library = { version: 1, series: [], volumes: [vol({ id: 'a', number: 1 }), vol({ id: 'b', number: null })] };
   it('encuentra mismo seriesId+number; number null nunca es duplicado', () => {
@@ -169,10 +209,18 @@ describe('cleanupOrphans', () => {
   });
 
   it('sin pendingUpload no devuelve nombres pero igual limpia huérfanas', async () => {
-    const { deps, drive, stats } = await setup();
+    const { deps, drive, stats, nodes } = await setup();
     const orphan = await drive.findOrCreateFolder('orphan', deps.volumesId);
+    nodes.get(orphan)!.createdTime = new Date(Date.now() - 25 * 3600_000).toISOString();
     expect(await cleanupOrphans(deps)).toEqual([]);
     expect(stats.deleted).toEqual([orphan]);
+  });
+
+  it('una carpeta sin listar y joven (otro dispositivo subiendo) se conserva', async () => {
+    const { deps, drive, stats } = await setup();
+    await drive.findOrCreateFolder('young', deps.volumesId);
+    expect(await cleanupOrphans(deps)).toEqual([]);
+    expect(stats.deleted).toEqual([]);
   });
 });
 

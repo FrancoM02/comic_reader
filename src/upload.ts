@@ -5,6 +5,13 @@ import type { Extraction } from './extract';
 import type { Store } from './store';
 import type { Library, SeriesKind, Volume } from './types';
 
+export class SessionExpiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
+
 export interface SessionDeps {
   drive: Drive;
   store: Store;
@@ -27,6 +34,7 @@ export interface UploadArgs {
 
 const PENDING_KEY = 'cr.pendingUpload';
 const CONCURRENCY = 3;
+const ORPHAN_AGE_MS = 24 * 3600_000;
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 
 export function findDuplicate(lib: Library, seriesId: string, number: number | null): Volume | undefined {
@@ -68,18 +76,27 @@ export async function uploadVolume(
     let first: Blob | null = null;
     let done = 0;
     onProgress(0, total);
+    let aborted = false;
     const worker = async () => {
-      for (;;) {
-        const r = await pages.next();
-        if (r.done) return;
-        const { index, blob } = r.value;
-        if (index === 0) first = blob;
-        const ext = EXT[blob.type] ?? 'jpg';
-        pageFileIds[index] = await drive.uploadBlob(`${String(index + 1).padStart(4, '0')}.${ext}`, folderId, blob);
-        onProgress(++done, total);
+      try {
+        while (!aborted) {
+          const r = await pages.next();
+          if (r.done || aborted) return;
+          const { index, blob } = r.value;
+          if (index === 0) first = blob;
+          const ext = EXT[blob.type] ?? 'jpg';
+          pageFileIds[index] = await drive.uploadBlob(`${String(index + 1).padStart(4, '0')}.${ext}`, folderId, blob);
+          onProgress(++done, total);
+        }
+      } catch (e) {
+        aborted = true;
+        throw e;
       }
     };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, Math.max(total, 1)) }, worker));
+    const results = await Promise.allSettled(Array.from({ length: Math.min(CONCURRENCY, Math.max(total, 1)) }, worker));
+    await pages.return?.(undefined);
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw failed.reason;
     if (total === 0 || done !== total || !first) throw new Error('El archivo no tiene páginas');
 
     const thumbFileId = await drive.uploadBlob('thumb.jpg', folderId, await (deps.thumb ?? makeThumb)(first));
@@ -87,6 +104,10 @@ export async function uploadVolume(
     const volume: Volume = {
       id: volumeId, seriesId, number, label, pageCount: total, folderId, pageFileIds, thumbFileId, uploadedAt: Date.now(),
     };
+    // Otro dispositivo pudo limpiar la carpeta mientras subíamos: no confirmar un tomo sin carpeta.
+    if (!(await drive.listChildren(volumesId)).some((c) => c.id === folderId)) {
+      throw new Error('La carpeta de la subida desapareció, volvé a subir el archivo');
+    }
     let oldFolderId: string | undefined;
     await store.updateLibrary((lib) => {
       oldFolderId = lib.volumes.find((v) => v.id === replaceVolumeId)?.folderId;
@@ -107,7 +128,7 @@ export async function uploadVolume(
   } catch (e) {
     if (e instanceof AuthInteractionRequired) {
       // El marcador queda: cleanupOrphans borra la carpeta parcial en el próximo arranque.
-      throw new Error('Tu sesión venció — tocá para renovar y volvé a subir el archivo');
+      throw new SessionExpiredError('Tu sesión venció — tocá para renovar y volvé a subir el archivo');
     }
     throw e;
   } finally {
@@ -129,6 +150,9 @@ export async function cleanupOrphans(deps: SessionDeps): Promise<string[]> {
   }
   for (const c of await drive.listChildren(volumesId)) {
     if (c.id === pending?.folderId || known.has(c.id)) continue;
+    // Puede ser la subida en curso de otro dispositivo: solo borrar si es vieja.
+    const created = c.createdTime ? Date.parse(c.createdTime) : NaN;
+    if (!(Date.now() - created > ORPHAN_AGE_MS)) continue;
     await drive.deleteFile(c.id).catch(() => {});
   }
   setPending(null);

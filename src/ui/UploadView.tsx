@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { parseFilename } from '../lib/filename';
 import { useSession } from '../session';
 import type { Library, SeriesKind } from '../types';
-import { findDuplicate, uploadVolume } from '../upload';
+import { SessionExpiredError, findDuplicate, uploadVolume } from '../upload';
 
 interface Row {
   key: number;
@@ -33,6 +33,13 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
   useEffect(() => {
     session.store.loadLibrary().then(setLib, () => {});
   }, [session]);
+
+  useEffect(() => {
+    if (!running) return;
+    const f = (e: BeforeUnloadEvent) => e.preventDefault();
+    addEventListener('beforeunload', f);
+    return () => removeEventListener('beforeunload', f);
+  }, [running]);
 
   const patch = (key: number, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
   const add = (files: FileList | File[] | null) => files && setRows((rs) => [...rs, ...Array.from(files).map(toRow)]);
@@ -72,6 +79,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
           patch(r.key, { status: 'listo' });
         } catch (e) {
           patch(r.key, { status: 'error', error: e instanceof Error ? e.message : 'Error desconocido' });
+          if (e instanceof SessionExpiredError) break;
         }
       }
       setLib(await session.store.loadLibrary());
@@ -91,7 +99,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
     >
       <h1>Subir</h1>
       <p>
-        <a href="#/">Volver</a>
+        {running ? <span>Volver (esperá a que termine la subida)</span> : <a href="#/">Volver</a>}
       </p>
       {cleaned.map((n) => (
         <p role="alert" key={n}>

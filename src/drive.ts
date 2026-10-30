@@ -14,6 +14,7 @@ export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
+  createdTime?: string;
 }
 
 export interface Drive {
@@ -141,7 +142,7 @@ export function createDrive(
       do {
         const p = new URLSearchParams({
           q: `'${esc(folderId)}' in parents and trashed=false`,
-          fields: 'nextPageToken,files(id,name,mimeType)',
+          fields: 'nextPageToken,files(id,name,mimeType,createdTime)',
           pageSize: '1000',
         });
         if (pageToken) p.set('pageToken', pageToken);

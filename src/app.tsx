@@ -105,12 +105,12 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
     }
     return (
       <SessionContext.Provider value={session}>
+        {banner}
         {hash === '#/upload' ? (
           <UploadView cleaned={cleaned} />
         ) : (
           <main class="home">
             <h1>Biblioteca</h1>
-            {banner}
             {err}
             {cleaned.map((n) => (
               <p role="alert" key={n}>

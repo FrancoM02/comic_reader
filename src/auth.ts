@@ -34,7 +34,7 @@ const SILENT_ERRORS = ['interaction_required', 'login_required', 'consent_requir
 
 let needsInteraction = false;
 let lastError: string | null = null;
-let busy = false;
+let busy = 0;
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -53,7 +53,7 @@ export function lastAuthError(): string | null {
 }
 /** Los flujos largos (subidas) lo marcan para que no se renueve por redirección. */
 export function setBusy(b: boolean): void {
-  busy = b;
+  busy = Math.max(0, busy + (b ? 1 : -1));
 }
 function flag(set?: boolean): boolean {
   try {
@@ -98,7 +98,7 @@ export async function initAuth(clientId: string, t: TokenTransport = createTrans
   pendingSilent = pendingInteractive = null;
   needsInteraction = false;
   lastError = null;
-  busy = false;
+  busy = 0;
   const returned = t.consumeReturn?.();
   if (returned) {
     if ('error' in returned) {
@@ -169,7 +169,7 @@ export async function getToken(opts: { forceRefresh?: boolean } = {}): Promise<s
 /** Renueva de forma proactiva si es seguro (sin trabajo en curso). Con redirección, la página se va. */
 export async function refreshIfIdle(): Promise<void> {
   const s = read();
-  if (!s || !transport || busy || flag() || needsInteraction) return;
+  if (!s || !transport || busy > 0 || flag() || needsInteraction) return;
   if (s.expiresAt - Date.now() >= REFRESH_AHEAD_MS) return;
   if (transport.navigateRefresh) {
     flag(true); // se limpia al volver con token; si vuelve con error, evita el bucle
