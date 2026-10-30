@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { setBusy } from '../../auth';
 import { getDeviceId } from '../../store';
 import type { Store } from '../../store';
 import type { VolumeProgress } from '../../types';
@@ -33,38 +34,57 @@ type ProgressStore = Pick<Store, 'loadProgress' | 'saveProgress' | 'resetProgres
  * Carga el progreso de Drive al abrir y lo guarda 3 s después del último avance,
  * al pasar a segundo plano, en pagehide y al desmontar. `seen(i)` = última página leída;
  * `jumped(i)` = salto con el slider, que cuenta como leída solo si se queda 2 s ahí.
- * Los guardados y el reset de este hook van en serie.
+ * Los guardados y el reset de este hook van en serie. Mientras haya algo sin guardar o un guardado
+ * en curso, marca la sesión como ocupada (setBusy) para que una renovación por redirección no se lo lleve.
  */
 export function useProgressSync(store: ProgressStore, volumeId: string, total: number) {
   const [start, setStart] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [unsaved, setUnsaved] = useState(false);
   const s = useRef({
     remoteMax: 0, remoteFinished: false, maxSeen: 0, resetGen: 0, dirty: false,
+    saving: false, busy: false, closed: false,
     timer: 0 as ReturnType<typeof setTimeout> | 0,
     dwell: 0 as ReturnType<typeof setTimeout> | 0,
     queue: Promise.resolve() as Promise<unknown>,
   });
+
+  /** Sube o baja el setBusy de auth según haya trabajo pendiente; siempre balanceado. */
+  const syncBusy = useCallback(() => {
+    const st = s.current;
+    const want = !st.closed && (st.dirty || st.saving);
+    if (want === st.busy) return;
+    st.busy = want;
+    setBusy(want);
+  }, []);
 
   const flush = useCallback(() => {
     const st = s.current;
     if (st.timer) clearTimeout(st.timer);
     st.timer = 0;
     st.queue = st.queue.then(async () => {
-      if (!st.dirty) return;
-      st.dirty = false;
-      const p = savePayload({ ...st, total, now: Date.now(), deviceId: getDeviceId() });
-      st.remoteMax = p.maxPage;
-      st.remoteFinished = p.finished;
-      try {
-        await store.saveProgress(volumeId, p);
-      } catch {
-        st.dirty = true; // se reintenta en el próximo guardado
+      if (st.dirty) {
+        st.dirty = false;
+        st.saving = true;
+        const p = savePayload({ ...st, total, now: Date.now(), deviceId: getDeviceId() });
+        st.remoteMax = p.maxPage;
+        st.remoteFinished = p.finished;
+        try {
+          await store.saveProgress(volumeId, p);
+          if (!st.dirty && !st.closed) setUnsaved(false);
+        } catch {
+          st.dirty = true; // se reintenta en el próximo guardado
+          if (!st.closed) setUnsaved(true);
+        }
+        st.saving = false;
       }
+      syncBusy();
     });
-  }, [store, volumeId, total]);
+  }, [store, volumeId, total, syncBusy]);
 
   useEffect(() => {
     let alive = true;
+    s.current.closed = false;
     store.loadProgress().then(
       (f) => {
         if (!alive) return;
@@ -83,6 +103,8 @@ export function useProgressSync(store: ProgressStore, volumeId: string, total: n
       removeEventListener('pagehide', flush);
       if (s.current.dwell) clearTimeout(s.current.dwell);
       flush();
+      // El guardado final sigue en la cola; al terminar, syncBusy libera (closed) pase lo que pase.
+      s.current.closed = true;
     };
   }, [store, volumeId, total, flush]);
 
@@ -93,10 +115,11 @@ export function useProgressSync(store: ProgressStore, volumeId: string, total: n
       const reachedEnd = st.maxSeen >= total - 1 && !st.remoteFinished;
       if (st.maxSeen <= st.remoteMax && !reachedEnd) return;
       st.dirty = true;
+      syncBusy();
       if (st.timer) clearTimeout(st.timer);
       st.timer = setTimeout(flush, DEBOUNCE_MS);
     },
-    [flush, total],
+    [flush, total, syncBusy],
   );
 
   const seen = useCallback(
@@ -133,10 +156,12 @@ export function useProgressSync(store: ProgressStore, volumeId: string, total: n
       // La resetGen real la decide Drive (otro dispositivo pudo resetear también).
       const p = (await store.loadProgress().catch(() => null))?.volumes[volumeId];
       if (p) st.resetGen = p.resetGen;
+      if (!st.closed) setUnsaved(false);
     });
-    st.queue = run.catch(() => {});
+    st.queue = run.catch(() => {}).then(syncBusy);
     return run;
-  }, [store, volumeId, total]);
+  }, [store, volumeId, total, syncBusy]);
 
-  return { start, error, seen, jumped, reset };
+  /** `unsaved`: el último guardado falló y queda progreso por guardar. */
+  return { start, error, seen, jumped, reset, unsaved };
 }

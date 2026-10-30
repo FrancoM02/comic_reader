@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { redirectTransport } from '../src/auth-transports';
+import { gisTransport, redirectTransport } from '../src/auth-transports';
 import {
   AuthInteractionRequired,
   getToken,
@@ -11,6 +11,8 @@ import {
   setBusy,
   signIn,
   signOut,
+  tokenMinutesLeft,
+  usesRedirect,
   type TokenTransport,
 } from '../src/auth';
 
@@ -29,7 +31,10 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  delete window.google;
+});
 
 test('signIn guarda la sesión y getToken devuelve el token cacheado si vence en más de 5 min', async () => {
   const t = fakeTransport();
@@ -111,9 +116,49 @@ test('redirect: request no interactivo rechaza con AuthInteractionRequired sin n
   await initAuth('cid', t);
   expiringSession();
   const before = location.href;
-  await expect(getToken()).rejects.toBeInstanceOf(AuthInteractionRequired);
+  await expect(getToken({ forceRefresh: true })).rejects.toBeInstanceOf(AuthInteractionRequired);
   expect(location.href).toBe(before);
   expect(needsRenewal()).toBe(true);
+  expect(usesRedirect()).toBe(true);
+});
+
+test('renovación que pide un toque: mientras el token no venció, getToken sigue devolviéndolo', async () => {
+  const request = vi.fn(async () => {
+    throw new AuthInteractionRequired();
+  });
+  await initAuth('cid', { request });
+  expiringSession(); // vence en 1 min: dentro del margen de 5 min, pero todavía sirve
+  expect(await getToken()).toBe('old');
+  expect(needsRenewal()).toBe(true); // el banner se muestra igual
+  expect(await getToken()).toBe('old');
+  expect(request).toHaveBeenCalledTimes(1); // ya se sabe que hace falta un toque: no insiste
+  await expect(getToken({ forceRefresh: true })).rejects.toBeInstanceOf(AuthInteractionRequired); // 401: no sirve
+  vi.setSystemTime(Date.now() + 55_000); // quedan 5 s: ya no
+  await expect(getToken()).rejects.toBeInstanceOf(AuthInteractionRequired);
+});
+
+test('tokenMinutesLeft y usesRedirect', async () => {
+  await initAuth('cid', fakeTransport());
+  expect(tokenMinutesLeft()).toBe(0);
+  expect(usesRedirect()).toBe(false);
+  await signIn();
+  expect(tokenMinutesLeft()).toBe(60);
+});
+
+test('signOut limpia el aviso de renovación, las marcas y revoca el token en GIS', async () => {
+  const revoke = vi.fn();
+  window.google = { accounts: { oauth2: { initTokenClient: vi.fn(), revoke } } };
+  await initAuth('cid', { request: vi.fn(async () => { throw new AuthInteractionRequired(); }) });
+  expiringSession();
+  await getToken({ forceRefresh: true }).catch(() => {});
+  expect(needsRenewal()).toBe(true);
+  localStorage.setItem('cr.noAutoRefresh', '1');
+  localStorage.setItem('cr.pendingUpload', '{}');
+  signOut();
+  expect(needsRenewal()).toBe(false);
+  expect(localStorage.getItem('cr.noAutoRefresh')).toBeNull();
+  expect(localStorage.getItem('cr.pendingUpload')).toBeNull();
+  expect(revoke).toHaveBeenCalledWith('old', expect.any(Function));
 });
 
 test('redirect: #error se informa, y no se reintenta solo', async () => {
@@ -173,4 +218,45 @@ test('setBusy es un contador: sigue ocupado hasta que se libera cada llamada', a
   setBusy(false);
   await refreshIfIdle();
   expect(nav).toHaveBeenCalledTimes(1);
+});
+
+function fakeGis() {
+  let cfg!: { callback: (r: { access_token?: string; expires_in?: number; error?: string }) => void };
+  const requestAccessToken = vi.fn();
+  window.google = {
+    accounts: {
+      oauth2: {
+        initTokenClient: (c) => {
+          cfg = c;
+          return { requestAccessToken };
+        },
+      },
+    },
+  };
+  return { requestAccessToken, respond: (r: { access_token?: string; expires_in?: number }) => cfg.callback(r) };
+}
+
+test('GIS: un pedido nuevo rechaza al anterior en vez de dejarlo colgado', async () => {
+  const g = fakeGis();
+  const t = gisTransport('cid');
+  await t.preload!();
+  const first = t.request(false);
+  const second = t.request(true);
+  await expect(first).rejects.toBeInstanceOf(AuthInteractionRequired);
+  g.respond({ access_token: 'A', expires_in: 100 });
+  await expect(second).resolves.toEqual({ accessToken: 'A', expiresIn: 100 });
+  expect(g.requestAccessToken).toHaveBeenCalledTimes(2);
+});
+
+test('GIS: al arrancar saca #access_token de la URL y restaura la ruta', async () => {
+  fakeGis();
+  localStorage.setItem('cr.oauth.state', 'abc');
+  localStorage.setItem('cr.oauth.route', '#/series/1');
+  history.replaceState(null, '', '/#access_token=XYZ&expires_in=3599&state=abc');
+  await initAuth('cid', gisTransport('cid'));
+  expect(location.hash).toBe('#/series/1');
+  expect(isSignedIn()).toBe(false); // en GIS el token de la URL no se usa
+  history.replaceState(null, '', '/#access_token=XYZ');
+  await initAuth('cid', gisTransport('cid'));
+  expect(location.hash).toBe('');
 });

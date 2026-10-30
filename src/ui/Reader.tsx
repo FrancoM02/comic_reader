@@ -262,6 +262,7 @@ function ReaderView({ lib, volume, series }: { lib: Library; volume: Volume; ser
                 Empezar de nuevo
               </button>
             </div>
+            {sync.unsaved && <p role="status">Progreso sin guardar</p>}
             {resetError && <p role="alert">{resetError}</p>}
           </div>
         </div>

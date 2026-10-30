@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { parseFilename } from '../lib/filename';
+import { setBusy, signIn, tokenMinutesLeft, usesRedirect } from '../auth';
+import { makeVolumeLabel } from '../lib/library-view';
 import { useSession } from '../session';
 import type { Library, SeriesKind } from '../types';
 import { SessionExpiredError, findDuplicate, uploadVolume } from '../upload';
@@ -47,7 +49,11 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
 
   async function subir() {
     setRunning(true);
+    setBusy(true); // por lote: entre tomo y tomo tampoco debe renovarse por redirección
     try {
+      // Corre dentro del clic: si el token vence pronto, renovarlo ahora (un toque) y no a mitad de la subida.
+      // Con redirección no se puede (navegar pierde los archivos elegidos): se sigue con el token actual.
+      if (!usesRedirect() && tokenMinutesLeft() < 30) await signIn().catch(() => {});
       for (const r of rows) {
         if (r.status === 'listo') continue;
         const current = await session.store.loadLibrary();
@@ -72,7 +78,15 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
         patch(r.key, { status: 'subiendo', error: undefined });
         try {
           await uploadVolume(
-            { file: r.file, seriesId, newSeries: existing ? undefined : { name: r.series.trim(), kind: r.kind }, number, label: r.label, replaceVolumeId },
+            {
+              file: r.file,
+              seriesId,
+              newSeries: existing ? undefined : { name: r.series.trim(), kind: r.kind },
+              number,
+              // El número pudo cambiar en esta pantalla: la etiqueta sale de él, no del nombre del archivo.
+              label: makeVolumeLabel(number, r.label, existing?.kind ?? r.kind),
+              replaceVolumeId,
+            },
             session,
             (done, total) => patch(r.key, { done, total }),
           );
@@ -84,6 +98,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
       }
       setLib(await session.store.loadLibrary());
     } finally {
+      setBusy(false);
       setRunning(false);
     }
   }

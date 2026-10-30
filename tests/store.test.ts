@@ -29,6 +29,7 @@ function fakeDrive() {
     async downloadBlob() { return new Blob(); },
     async listChildren(): Promise<DriveFile[]> { return []; },
     async deleteFile() {},
+    async trashFile() {},
   };
   return { drive, nodes };
 }

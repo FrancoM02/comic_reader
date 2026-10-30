@@ -21,7 +21,7 @@ GitHub Pages gratis requiere repo **público**.
 
 1. En GitHub: New repository, público, nombre por ejemplo `comic_reader`. Subí el código.
 2. Settings > Pages > Build and deployment > Source: **GitHub Actions**.
-3. Cada push a `main` despliega en `https://<usuario>.github.io/<repo>/`.
+3. Cada push a `main` o `master` despliega en `https://<usuario>.github.io/<repo>/`.
 
 ### 2. Proyecto en Google Cloud
 
@@ -31,7 +31,7 @@ GitHub Pages gratis requiere repo **público**.
    - User type: **External**.
    - Completá nombre de la app, email de soporte y email de contacto.
    - Scopes: agregá `.../auth/drive.file` (es un scope no sensible, no requiere verificación).
-   - Publishing status: pasá a **In production** (si queda en "Testing", los tokens vencen a los 7 días y solo entran los usuarios de prueba).
+   - Publishing status: o bien agregá tu cuenta de Google en **Test users** (en "Testing" solo pueden entrar los usuarios de prueba listados), o bien pasá la app a **In production**.
 4. APIs & Services > Credentials > Create credentials > **OAuth client ID** > Application type: **Web application**.
    - **Authorized JavaScript origins:**
      - `https://<usuario>.github.io` (solo el origen, sin ruta ni barra final)
@@ -56,8 +56,8 @@ Seguí el checklist de [`docs/VERIFICACION.md`](docs/VERIFICACION.md), sobre tod
 
 ## Notas sobre el login
 
-- Navegadores normales: Google Identity Services (token client), con renovación silenciosa.
-- iPhone con la app instalada en la pantalla de inicio (`navigator.standalone`): flujo por redirección (implicit flow), porque el popup no funciona bien en ese modo. Al volver, la app restaura la pantalla en la que estabas.
+- Navegadores normales: Google Identity Services (token client). El token dura una hora; la app intenta renovarlo sola, pero la renovación puede pedirte un toque más o menos una vez por hora (aparece "Tocá para renovar"). Mientras el token siga vigente, la app sigue funcionando aunque el aviso esté visible. Al empezar una subida, si al token le queda poco, se renueva en ese momento.
+- iPhone con la app instalada en la pantalla de inicio (`navigator.standalone`): flujo por redirección (implicit flow), porque el popup no funciona bien en ese modo. Renovar implica salir a Google y volver (la app restaura la pantalla en la que estabas); nunca lo hace mientras hay una subida o progreso de lectura sin guardar.
 - Si algo de eso fallara en tu iPhone, la alternativa es usar la app desde Safari.
 
 ## Probado en

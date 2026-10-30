@@ -29,6 +29,8 @@ export class AuthInteractionRequired extends Error {
 }
 
 const NO_AUTO_KEY = 'cr.noAutoRefresh';
+/** Margen para seguir usando el token guardado cuando la renovación necesita un toque. */
+const STILL_VALID_MS = 10_000;
 const REFRESH_AHEAD_MS = 15 * 60_000;
 const SILENT_ERRORS = ['interaction_required', 'login_required', 'consent_required', 'account_selection_required'];
 
@@ -162,8 +164,29 @@ export async function signIn(): Promise<void> {
 export async function getToken(opts: { forceRefresh?: boolean } = {}): Promise<string> {
   const s = read();
   if (!s) throw new Error('No hay sesión iniciada');
-  if (!opts.forceRefresh && s.expiresAt - Date.now() > MARGIN_MS) return s.accessToken;
-  return renew(false);
+  if (opts.forceRefresh) return renew(false);
+  if (s.expiresAt - Date.now() > MARGIN_MS) return s.accessToken;
+  const stillValid = () => s.expiresAt > Date.now() + STILL_VALID_MS;
+  // Ya se sabe que hace falta un toque: mientras el token sirva, no reintentar en silencio.
+  if (needsInteraction && stillValid()) return s.accessToken;
+  try {
+    return await renew(false);
+  } catch (e) {
+    // El banner pide el toque (needsInteraction), pero el token de verdad todavía no venció.
+    if (e instanceof AuthInteractionRequired && stillValid()) return s.accessToken;
+    throw e;
+  }
+}
+
+/** Minutos de vida que le quedan al token guardado (0 si no hay sesión). */
+export function tokenMinutesLeft(): number {
+  const s = read();
+  return s ? Math.max(0, (s.expiresAt - Date.now()) / 60_000) : 0;
+}
+
+/** true si renovar navega la página (iPhone instalado): no se puede pedir un toque sin irse. */
+export function usesRedirect(): boolean {
+  return !!transport?.navigateRefresh;
 }
 
 /** Renueva de forma proactiva si es seguro (sin trabajo en curso). Con redirección, la página se va. */
@@ -180,9 +203,20 @@ export async function refreshIfIdle(): Promise<void> {
 }
 
 export function signOut(): void {
+  const token = read()?.accessToken;
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('cr.pendingUpload');
   } catch {
     /* nada */
   }
+  flag(false);
+  needsInteraction = false;
+  lastError = null;
+  try {
+    if (token) window.google?.accounts?.oauth2?.revoke?.(token, () => {});
+  } catch {
+    /* revocar es best-effort */
+  }
+  notify();
 }

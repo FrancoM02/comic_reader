@@ -91,13 +91,15 @@ export function SeriesView({ id }: { id: string }) {
       </div>
       <ul class="volumes">
         {volumes.map((v) => {
-          const st = volumeState(prog.volumes[v.id]);
+          const p = prog.volumes[v.id];
+          const st = volumeState(p);
+          const label = st === 'reading' && p ? `${STATE.reading} ${Math.round(((p.maxPage + 1) / p.totalPages) * 100)}%` : STATE[st];
           return (
             <li key={v.id}>
               <a class="vol" href={`#/read/${v.id}`}>
                 <Thumb fileId={v.thumbFileId} alt={v.label} />
                 <span class="title">{v.label || 'Sin número'}</span>
-                <span class="state">{STATE[st]}</span>
+                <span class="state">{label}</span>
               </a>
               <div class="actions">
                 <button type="button" onClick={() => setNumber(v)}>Cambiar número</button>

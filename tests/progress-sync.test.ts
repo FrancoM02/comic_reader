@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/preact';
+import { setBusy } from '../src/auth';
+
+vi.mock('../src/auth', async (orig) => {
+  const a = await orig<typeof import('../src/auth')>();
+  return { ...a, setBusy: vi.fn() };
+});
 import { savePayload, startPage, useProgressSync } from '../src/ui/reader/useProgressSync';
 import type { ProgressFile, VolumeProgress } from '../src/types';
 
@@ -162,5 +168,65 @@ describe('useProgressSync', () => {
     await act(async () => { vi.advanceTimersByTime(3000); });
     const last = store.saveProgress.mock.calls.at(-1)![1];
     expect(last).toMatchObject({ maxPage: 1, resetGen: 2, finished: false });
+  });
+
+  describe('setBusy (para que una renovación por redirección no pierda progreso)', () => {
+    const calls = () => vi.mocked(setBusy).mock.calls.map((c) => c[0]);
+    const settle = () => act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); });
+    beforeEach(() => vi.mocked(setBusy).mockClear());
+
+    it('ocupado mientras hay algo sin guardar o un guardado en curso; libre al terminar', async () => {
+      let release!: () => void;
+      store.saveProgress.mockImplementationOnce(() => new Promise<void>((r) => (release = r)));
+      const { result } = await setup();
+      expect(calls()).toEqual([]);
+      act(() => result.current.seen(7));
+      expect(calls()).toEqual([true]);
+      act(() => result.current.seen(8));
+      expect(calls()).toEqual([true]);
+      await act(async () => { vi.advanceTimersByTime(3000); });
+      await settle();
+      expect(store.saveProgress).toHaveBeenCalledTimes(1);
+      expect(calls()).toEqual([true]); // guardado en curso
+      await act(async () => { release(); });
+      expect(calls()).toEqual([true, false]);
+    });
+
+    it('si el guardado falla queda ocupado y avisa "sin guardar"; al desmontar se libera', async () => {
+      store.saveProgress.mockRejectedValueOnce(new Error('red'));
+      const { result, unmount } = await setup();
+      act(() => result.current.seen(7));
+      await act(async () => { vi.advanceTimersByTime(3000); });
+      await settle();
+      expect(result.current.unsaved).toBe(true);
+      expect(calls()).toEqual([true]);
+      await act(async () => unmount());
+      await settle();
+      expect(store.saveProgress).toHaveBeenCalledTimes(2); // reintento al desmontar
+      expect(calls()).toEqual([true, false]);
+    });
+
+    it('balanceado al desmontar con un cambio sin guardar, aunque el guardado final falle', async () => {
+      store.saveProgress.mockRejectedValue(new Error('red'));
+      const { result, unmount } = await setup();
+      act(() => result.current.seen(8));
+      await act(async () => unmount());
+      await settle();
+      expect(calls()).toEqual([true, false]);
+    });
+
+    it('un guardado exitoso borra el aviso "sin guardar"', async () => {
+      store.saveProgress.mockRejectedValueOnce(new Error('red'));
+      const { result } = await setup();
+      act(() => result.current.seen(7));
+      await act(async () => { vi.advanceTimersByTime(3000); });
+      await settle();
+      expect(result.current.unsaved).toBe(true);
+      act(() => result.current.seen(8));
+      await act(async () => { vi.advanceTimersByTime(3000); });
+      await settle();
+      expect(result.current.unsaved).toBe(false);
+      expect(calls()).toEqual([true, false]);
+    });
   });
 });

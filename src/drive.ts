@@ -26,6 +26,8 @@ export interface Drive {
   downloadBlob(fileId: string, signal?: AbortSignal): Promise<Blob>;
   listChildren(folderId: string): Promise<DriveFile[]>;
   deleteFile(fileId: string): Promise<void>;
+  /** Manda a la papelera de Drive (recuperable 30 días). */
+  trashFile(fileId: string): Promise<void>;
 }
 
 type GetToken = (o?: { forceRefresh?: boolean }) => Promise<string>;
@@ -46,14 +48,28 @@ export function createDrive(
     }
   }
 
+  const backoff = (attempt: number) => {
+    const base = Math.min(500 * 2 ** attempt, 16000);
+    return sleep(Math.min(base + Math.random() * base * 0.25, 16000));
+  };
+
   async function request(url: string, init: RequestInit = {}): Promise<Response> {
     let token = await getToken();
     let refreshed = false;
     for (let attempt = 0; ; ) {
-      const res = await fetchFn(url, {
-        ...init,
-        headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` },
-      });
+      let res: Response;
+      try {
+        res = await fetchFn(url, {
+          ...init,
+          headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${token}` },
+        });
+      } catch (e) {
+        // Falla de red (TypeError): se reintenta como un 5xx. Una cancelación no.
+        const aborted = init.signal?.aborted || (e instanceof Error && e.name === 'AbortError');
+        if (aborted || attempt >= MAX_RETRIES) throw e;
+        await backoff(attempt++);
+        continue;
+      }
       if (res.ok) return res;
       if (res.status === 401 && !refreshed) {
         refreshed = true;
@@ -66,17 +82,16 @@ export function createDrive(
         res.status >= 500 ||
         (res.status === 403 && (reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded'));
       if (!retryable || attempt >= MAX_RETRIES) throw new DriveError(res.status, reason);
-      const base = Math.min(500 * 2 ** attempt, 16000);
-      await sleep(Math.min(base + Math.random() * base * 0.25, 16000));
-      attempt++;
+      await backoff(attempt++);
     }
   }
 
   const getJson = async <T>(url: string): Promise<T> => (await request(url)).json();
 
+  /** Si hay duplicados (dos dispositivos creando a la vez), todos eligen el más viejo. */
   async function find(q: string): Promise<string | null> {
     const r = await getJson<{ files?: { id: string }[] }>(
-      `${API}?${new URLSearchParams({ q: `${q} and trashed=false`, fields: 'files(id,name,mimeType)', pageSize: '1' })}`,
+      `${API}?${new URLSearchParams({ q: `${q} and trashed=false`, fields: 'files(id,name,mimeType)', orderBy: 'createdTime', pageSize: '1' })}`,
     );
     return r.files?.[0]?.id ?? null;
   }
@@ -155,6 +170,14 @@ export function createDrive(
 
     async deleteFile(fileId) {
       await request(`${API}/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+    },
+
+    async trashFile(fileId) {
+      await request(`${API}/${encodeURIComponent(fileId)}?fields=id`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trashed: true }),
+      });
     },
   };
 }

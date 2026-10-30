@@ -22,6 +22,7 @@ declare global {
             callback: (r: GisTokenResponse) => void;
             error_callback: (e: { type: string }) => void;
           }): GisClient;
+          revoke?(token: string, done?: () => void): void;
         };
       };
     };
@@ -70,15 +71,27 @@ export function gisTransport(clientId: string): TokenTransport {
   }
 
   function ask(c: GisClient, interactive: boolean) {
+    // GIS tiene un solo callback: un pedido nuevo deja huérfano al anterior, que se rechaza para no colgarlo.
+    fail('Pedido de token reemplazado por otro');
     return new Promise<TokenResult>((resolve, reject) => {
-      pendingResolve = resolve;
-      pendingReject = reject;
+      pendingResolve = (r) => {
+        pendingResolve = pendingReject = null;
+        resolve(r);
+      };
+      pendingReject = (e) => {
+        pendingResolve = pendingReject = null;
+        reject(e);
+      };
       interactiveNow = interactive;
       c.requestAccessToken({ prompt: '' });
     });
   }
 
   return {
+    consumeReturn: () => {
+      stripAuthHash();
+      return null;
+    },
     preload: async () => void (await getClient()),
     // Si el cliente ya está listo, requestAccessToken corre sincrónico dentro del gesto del usuario.
     request: (interactive) => (client ? ask(client, interactive) : getClient().then((c) => ask(c, interactive))),
@@ -87,6 +100,27 @@ export function gisTransport(clientId: string): TokenTransport {
 
 const K_STATE = 'cr.oauth.state';
 const K_ROUTE = 'cr.oauth.route';
+
+/**
+ * Si la URL trae un `#access_token`/`#error` de OAuth, lo saca del hash (restaurando la ruta guardada)
+ * y devuelve sus parámetros junto con el state esperado. Si no, null.
+ */
+function stripAuthHash(): { params: URLSearchParams; expected: string | null } | null {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+  if (!params.has('access_token') && !params.has('error')) return null;
+  let expected: string | null = null;
+  let route = '';
+  try {
+    expected = localStorage.getItem(K_STATE);
+    route = localStorage.getItem(K_ROUTE) ?? '';
+    localStorage.removeItem(K_STATE);
+    localStorage.removeItem(K_ROUTE);
+  } catch {
+    /* nada */
+  }
+  history.replaceState(null, '', location.pathname + location.search + route);
+  return { params, expected };
+}
 
 function authUrl(clientId: string, interactive: boolean): string {
   const state = crypto.randomUUID();
@@ -120,19 +154,9 @@ export function redirectTransport(clientId: string): TokenTransport {
       location.href = authUrl(clientId, false);
     },
     consumeReturn() {
-      const params = new URLSearchParams(location.hash.replace(/^#/, ''));
-      if (!params.has('access_token') && !params.has('error')) return null;
-      let expected: string | null = null;
-      let route = '';
-      try {
-        expected = localStorage.getItem(K_STATE);
-        route = localStorage.getItem(K_ROUTE) ?? '';
-        localStorage.removeItem(K_STATE);
-        localStorage.removeItem(K_ROUTE);
-      } catch {
-        /* nada */
-      }
-      history.replaceState(null, '', location.pathname + location.search + route);
+      const r = stripAuthHash();
+      if (!r) return null;
+      const { params, expected } = r;
       if (!expected || params.get('state') !== expected) return null;
       const error = params.get('error');
       if (error) return { error };

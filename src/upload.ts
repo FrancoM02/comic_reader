@@ -109,25 +109,37 @@ export async function uploadVolume(
       throw new Error('La carpeta de la subida desapareció, volvé a subir el archivo');
     }
     let oldFolderId: string | undefined;
-    await store.updateLibrary((lib) => {
-      oldFolderId = lib.volumes.find((v) => v.id === replaceVolumeId)?.folderId;
+    const register = (lib: Library): Library => {
+      oldFolderId = lib.volumes.find((v) => v.id === replaceVolumeId)?.folderId ?? oldFolderId;
       const series =
         newSeries && !lib.series.some((s) => s.id === seriesId)
           ? [...lib.series, { id: seriesId, name: newSeries.name, kind: newSeries.kind, dir: newSeries.kind === 'manga' ? 'rtl' as const : 'ltr' as const, mode: 'paged' as const, createdAt: Date.now() }]
           : lib.series;
-      return { ...lib, series, volumes: [...lib.volumes.filter((v) => v.id !== replaceVolumeId), volume] };
-    });
+      return { ...lib, series, volumes: [...lib.volumes.filter((v) => v.id !== replaceVolumeId && v.id !== volumeId), volume] };
+    };
+    // library.json no tiene control de concurrencia: otro dispositivo pudo pisar la escritura. Se verifica.
+    const registered = async () => (await store.loadLibrary()).volumes.some((v) => v.id === volumeId);
+    await store.updateLibrary(register);
+    if (!(await registered())) {
+      await store.updateLibrary(register);
+      if (!(await registered())) throw new Error('No se pudo registrar el tomo en la biblioteca, volvé a subir el archivo');
+    }
     setPending(null);
 
     if (oldFolderId) {
-      // El viejo ya salió de library.json; si esto falla queda huérfana y se limpia al arrancar.
-      await drive.deleteFile(oldFolderId);
-      await store.removeProgress([replaceVolumeId!]);
+      // El tomo nuevo ya está guardado: si falla borrar el viejo, la subida igual salió bien
+      // (la carpeta vieja queda huérfana en volumes/; tiene thumb.jpg, así que la limpieza no la toca).
+      try {
+        await drive.deleteFile(oldFolderId);
+        await store.removeProgress([replaceVolumeId!]);
+      } catch (e) {
+        console.warn('No se pudo borrar el tomo reemplazado', e);
+      }
     }
     return volume;
   } catch (e) {
     if (e instanceof AuthInteractionRequired) {
-      // El marcador queda: cleanupOrphans borra la carpeta parcial en el próximo arranque.
+      // El marcador queda: cleanupOrphans manda la carpeta parcial a la papelera en el próximo arranque.
       throw new SessionExpiredError('Tu sesión venció — tocá para renovar y volvé a subir el archivo');
     }
     throw e;
@@ -136,6 +148,11 @@ export async function uploadVolume(
   }
 }
 
+/**
+ * Manda a la papelera (no borra) las carpetas de volumes/ que no figuran en library.json:
+ * la de la subida propia cortada (marcador) y las ajenas de más de 24 h que no terminaron de subir
+ * (las que ya tienen thumb.jpg se dejan: son tomos completos que una escritura perdida sacó de la lista).
+ */
 export async function cleanupOrphans(deps: SessionDeps): Promise<string[]> {
   const { drive, store, volumesId } = deps;
   const names: string[] = [];
@@ -144,16 +161,21 @@ export async function cleanupOrphans(deps: SessionDeps): Promise<string[]> {
   const known = new Set(lib.volumes.map((v) => v.folderId));
   if (pending) {
     if (!known.has(pending.folderId)) {
-      await drive.deleteFile(pending.folderId).catch(() => {});
+      await drive.trashFile(pending.folderId).catch(() => {});
       names.push(pending.fileName);
     }
   }
   for (const c of await drive.listChildren(volumesId)) {
     if (c.id === pending?.folderId || known.has(c.id)) continue;
-    // Puede ser la subida en curso de otro dispositivo: solo borrar si es vieja.
+    // Puede ser la subida en curso de otro dispositivo: solo si es vieja.
     const created = c.createdTime ? Date.parse(c.createdTime) : NaN;
     if (!(Date.now() - created > ORPHAN_AGE_MS)) continue;
-    await drive.deleteFile(c.id).catch(() => {});
+    const complete = await drive
+      .listChildren(c.id)
+      .then((files) => files.some((f) => f.name === 'thumb.jpg'))
+      .catch(() => true); // ante la duda, no tocar
+    if (complete) continue;
+    await drive.trashFile(c.id).catch(() => {});
   }
   setPending(null);
   return names;

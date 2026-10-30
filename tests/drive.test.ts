@@ -124,4 +124,53 @@ describe('drive', () => {
     expect(await drive.uploadBlob('p.jpg', 'P', new Blob(['x'], { type: 'image/jpeg' }))).toBe('u');
     expect(String(fetchFn.mock.calls[0][0])).toContain('uploadType=multipart');
   });
+
+  it('una falla de red (TypeError) se reintenta con backoff como un 5xx', async () => {
+    const { drive, fetchFn, sleep } = setup([json(200, { files: [{ id: 'F' }] })]);
+    const ok = fetchFn.getMockImplementation()!;
+    fetchFn
+      .mockImplementationOnce(async () => { throw new TypeError('Failed to fetch'); })
+      .mockImplementationOnce(async () => { throw new TypeError('Failed to fetch'); })
+      .mockImplementation(ok);
+    expect(await drive.findFile('a', 'p')).toBe('F');
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it('fallas de red persistentes se rinden tras 5 reintentos', async () => {
+    const { drive, fetchFn } = setup([]);
+    fetchFn.mockImplementation(async () => { throw new TypeError('Failed to fetch'); });
+    await expect(drive.findFile('a', 'p')).rejects.toBeInstanceOf(TypeError);
+    expect(fetchFn).toHaveBeenCalledTimes(6);
+  });
+
+  it('una descarga cancelada (abort) no se reintenta', async () => {
+    const { drive, fetchFn, sleep } = setup([]);
+    const ac = new AbortController();
+    fetchFn.mockImplementation(async () => {
+      ac.abort();
+      throw new DOMException('aborted', 'AbortError');
+    });
+    await expect(drive.downloadBlob('f', ac.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('find ordena por createdTime para que todos los dispositivos elijan el más viejo', async () => {
+    const { drive, fetchFn } = setup([json(200, { files: [{ id: 'F1' }] }), json(200, { files: [{ id: 'L' }] })]);
+    await drive.findOrCreateFolder('ComicReader');
+    await drive.findFile('library.json', 'R');
+    for (const c of fetchFn.mock.calls) {
+      expect(new URL(String(c[0])).searchParams.get('orderBy')).toBe('createdTime');
+    }
+  });
+
+  it('trashFile manda a la papelera con PATCH {trashed:true}, no DELETE', async () => {
+    const { drive, fetchFn } = setup([json(200, { id: 'f' })]);
+    await drive.trashFile('f');
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(String(url)).toContain('/drive/v3/files/f');
+    expect(init!.method).toBe('PATCH');
+    expect(JSON.parse(init!.body as string)).toEqual({ trashed: true });
+  });
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import { needsRenewal, subscribeAuth } from '../auth';
 import { useSession } from '../session';
 import type { Library, ProgressFile } from '../types';
 
@@ -26,7 +27,7 @@ export function Thumb({ fileId, alt = '' }: { fileId: string; alt?: string }) {
   return src ? <img src={src} alt={alt} loading="lazy" /> : <div class="thumb-ph" />;
 }
 
-/** Biblioteca + progreso; recarga al volver la pestaña a primer plano. */
+/** Biblioteca + progreso; recarga al volver la pestaña a primer plano y al renovar la sesión. */
 export function useLibraryData() {
   const { store } = useSession();
   const [lib, setLib] = useState<Library | null>(null);
@@ -46,7 +47,16 @@ export function useLibraryData() {
     reload();
     const f = () => document.visibilityState === 'visible' && reload();
     document.addEventListener('visibilitychange', f);
-    return () => document.removeEventListener('visibilitychange', f);
+    let expired = needsRenewal();
+    const unsub = subscribeAuth(() => {
+      const now = needsRenewal();
+      if (expired && !now) reload();
+      expired = now;
+    });
+    return () => {
+      document.removeEventListener('visibilitychange', f);
+      unsub();
+    };
   }, [reload]);
   return { lib, prog, error, reload };
 }

@@ -15,7 +15,7 @@ type Node = { id: string; name: string; parent?: string; folder: boolean; data?:
 function fakeDrive(opts: { delay?: boolean } = {}) {
   let n = 0;
   const nodes = new Map<string, Node>();
-  const stats = { inflight: 0, maxInflight: 0, uploads: [] as string[], deleted: [] as string[] };
+  const stats = { inflight: 0, maxInflight: 0, uploads: [] as string[], deleted: [] as string[], trashed: [] as string[] };
   const drive: Drive = {
     async findOrCreateFolder(name, parentId) {
       for (const x of nodes.values()) if (x.folder && x.name === name && x.parent === parentId) return x.id;
@@ -51,6 +51,10 @@ function fakeDrive(opts: { delay?: boolean } = {}) {
     },
     async deleteFile(id) {
       stats.deleted.push(id);
+      nodes.delete(id);
+    },
+    async trashFile(id) {
+      stats.trashed.push(id);
       nodes.delete(id);
     },
   };
@@ -196,7 +200,11 @@ describe('findDuplicate', () => {
 });
 
 describe('cleanupOrphans', () => {
-  it('borra la carpeta de pendingUpload y las carpetas de volumes/ que no están en library.json, y devuelve el fileName', async () => {
+  const age = (nodes: Map<string, Node>, id: string, h: number) => {
+    nodes.get(id)!.createdTime = new Date(Date.now() - h * 3600_000).toISOString();
+  };
+
+  it('manda a la papelera la carpeta de pendingUpload (sin borrar) y devuelve el fileName', async () => {
     const { deps, drive, store, stats } = await setup();
     const keep = await drive.findOrCreateFolder('keep', deps.volumesId);
     const orphan = await drive.findOrCreateFolder('orphan', deps.volumesId);
@@ -204,16 +212,31 @@ describe('cleanupOrphans', () => {
     localStorage.setItem('cr.pendingUpload', JSON.stringify({ folderId: orphan, fileName: 'a.cbz' }));
     const names = await cleanupOrphans(deps);
     expect(names).toEqual(['a.cbz']);
-    expect(stats.deleted).toEqual([orphan]);
+    expect(stats.trashed).toEqual([orphan]);
+    expect(stats.deleted).toEqual([]);
     expect(localStorage.getItem('cr.pendingUpload')).toBeNull();
   });
 
-  it('sin pendingUpload no devuelve nombres pero igual limpia huérfanas', async () => {
+  it('sin pendingUpload no devuelve nombres pero igual manda a la papelera las huérfanas viejas incompletas', async () => {
     const { deps, drive, stats, nodes } = await setup();
     const orphan = await drive.findOrCreateFolder('orphan', deps.volumesId);
-    nodes.get(orphan)!.createdTime = new Date(Date.now() - 25 * 3600_000).toISOString();
+    await drive.uploadBlob('0001.jpg', orphan, new Blob());
+    age(nodes, orphan, 25);
     expect(await cleanupOrphans(deps)).toEqual([]);
-    expect(stats.deleted).toEqual([orphan]);
+    expect(stats.trashed).toEqual([orphan]);
+    expect(stats.deleted).toEqual([]);
+  });
+
+  it('una carpeta vieja sin listar pero con thumb.jpg (subida completa) se deja', async () => {
+    const { deps, drive, stats, nodes } = await setup();
+    const done = await drive.findOrCreateFolder('done', deps.volumesId);
+    await drive.uploadBlob('0001.jpg', done, new Blob());
+    await drive.uploadBlob('thumb.jpg', done, new Blob());
+    age(nodes, done, 48);
+    expect(await cleanupOrphans(deps)).toEqual([]);
+    expect(stats.trashed).toEqual([]);
+    expect(stats.deleted).toEqual([]);
+    expect(nodes.has(done)).toBe(true);
   });
 
   it('una carpeta sin listar y joven (otro dispositivo subiendo) se conserva', async () => {
@@ -221,6 +244,58 @@ describe('cleanupOrphans', () => {
     await drive.findOrCreateFolder('young', deps.volumesId);
     expect(await cleanupOrphans(deps)).toEqual([]);
     expect(stats.deleted).toEqual([]);
+    expect(stats.trashed).toEqual([]);
+  });
+});
+
+describe('uploadVolume: verificación de library.json', () => {
+  const args = { file, seriesId: 'S', newSeries: { name: 'A', kind: 'comic' as const }, number: 1, label: 'x' };
+
+  it('si otro dispositivo pisó la escritura, reintenta updateLibrary una vez', async () => {
+    const { deps, store } = await setup();
+    const orig = store.updateLibrary.bind(store);
+    const update = vi.spyOn(store, 'updateLibrary');
+    let first = true;
+    update.mockImplementation(async (op) => {
+      const r = await orig(op);
+      if (first) {
+        first = false;
+        await orig((l) => ({ ...l, volumes: [] })); // escritura perdida
+      }
+      return r;
+    });
+    const v = await uploadVolume(args, deps, () => {});
+    expect(update).toHaveBeenCalledTimes(2);
+    expect((await store.loadLibrary()).volumes.map((x) => x.id)).toEqual([v.id]);
+    expect(localStorage.getItem('cr.pendingUpload')).toBeNull();
+  });
+
+  it('si el tomo sigue sin aparecer tras el reintento, falla', async () => {
+    const { deps, store } = await setup();
+    const orig = store.updateLibrary.bind(store);
+    const update = vi.spyOn(store, 'updateLibrary').mockImplementation(async (op) => {
+      const r = await orig(op);
+      await orig((l) => ({ ...l, volumes: [] }));
+      return r;
+    });
+    await expect(uploadVolume(args, deps, () => {})).rejects.toThrow('No se pudo registrar');
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(localStorage.getItem('cr.pendingUpload')).not.toBeNull();
+  });
+
+  it('si falla borrar el tomo reemplazado, la subida igual sale bien (console.warn)', async () => {
+    const { deps, store } = await setup();
+    await store.updateLibrary((l) => ({
+      ...l,
+      series: [{ id: 'S', name: 'A', kind: 'comic', dir: 'ltr', mode: 'paged', createdAt: 0 }],
+      volumes: [vol({ id: 'old', seriesId: 'S', folderId: 'OLD' })],
+    }));
+    deps.drive.deleteFile = async () => { throw new Error('red'); };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const v = await uploadVolume({ file, seriesId: 'S', number: 1, label: 'T01', replaceVolumeId: 'old' }, deps, () => {});
+    expect((await store.loadLibrary()).volumes.map((x) => x.id)).toEqual([v.id]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });
 

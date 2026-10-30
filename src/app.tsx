@@ -27,6 +27,8 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
   const [, setTick] = useState(0);
   const [session, setSession] = useState<SessionDeps | null>(injected ?? null);
   const [sessionError, setSessionError] = useState('');
+  // Sube tras renovar la sesión o con "Reintentar": vuelve a correr la apertura de la biblioteca.
+  const [initAttempt, setInitAttempt] = useState(0);
   const [cleaned, setCleaned] = useState<string[]>([]);
   const hash = useHash();
 
@@ -50,7 +52,12 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
     return () => {
       alive = false;
     };
-  }, [signedIn, session]);
+  }, [signedIn, session, initAttempt]);
+
+  const retry = () => {
+    setSessionError('');
+    setInitAttempt((n) => n + 1);
+  };
 
   useEffect(() => {
     const unsub = subscribeAuth(() => setTick((n) => n + 1));
@@ -68,6 +75,7 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
     try {
       await signIn();
       setSignedIn(isSignedIn());
+      retry();
     } catch (e) {
       setError(`No se pudo iniciar sesión: ${e instanceof Error ? e.message : 'error desconocido'}`);
     }
@@ -103,6 +111,11 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
           {banner}
           {sessionError ? <p role="alert">{sessionError}</p> : <p>Cargando…</p>}
           {err}
+          {sessionError && (
+            <button type="button" onClick={retry}>
+              Reintentar
+            </button>
+          )}{' '}
           {sessionError && salir}
         </main>
       );
