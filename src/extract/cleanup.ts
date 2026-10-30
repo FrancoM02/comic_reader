@@ -18,7 +18,7 @@ export function withCleanup(inner: AsyncGenerator<Page>, cleanup: () => unknown)
         throw e;
       }
     },
-    async return(v) {
+    async return(v?: unknown) {
       try {
         await inner.return(v);
       } finally {
@@ -26,7 +26,7 @@ export function withCleanup(inner: AsyncGenerator<Page>, cleanup: () => unknown)
       }
       return { done: true, value: v };
     },
-    async throw(e) {
+    async throw(e?: unknown) {
       try {
         await inner.return(undefined);
       } finally {
