@@ -1,3 +1,4 @@
+import { describe, expect, it, vi } from 'vitest';
 import { createDrive, DriveError } from '../src/drive';
 
 const json = (status: number, body: unknown = {}) =>
