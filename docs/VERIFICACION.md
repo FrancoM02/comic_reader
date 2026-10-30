@@ -38,3 +38,10 @@ Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página s
 - [ ] **Corte a mitad de subida:** empezá una subida y cerrá la pestaña a la mitad. Al reabrir la app. **Criterio:** aparece "La subida de X se cortó, elegí el archivo de nuevo" y la carpeta parcial desaparece de Drive.
 - [ ] **Duplicado:** subí otra vez el mismo número de la misma serie. **Criterio:** aparece "Reemplazar / Subir igual / Cancelar"; "Reemplazar" deja un solo tomo y borra la carpeta vieja en Drive.
 - [ ] **Sesión vencida:** con la sesión vencida a mitad de subida. **Criterio:** mensaje "Tu sesión venció — tocá para renovar y volvé a subir el archivo".
+
+## Biblioteca (Tarea 8)
+
+- [ ] **Grilla (PC y celular):** abrí la app con tomos subidos. **Criterio:** "Series" muestra portadas (miniatura del primer tomo) y "Seguir leyendo" aparece solo si hay un tomo empezado, con barra de progreso.
+- [ ] **Acciones de serie:** en una serie, renombrá, cambiá tipo/sentido/modo y borrá (con confirmación). **Criterio:** `library.json` en Drive refleja cada cambio; al borrar desaparecen las carpetas de los tomos.
+- [ ] **Acciones de tomo:** cambiá el número, movelo a otra serie, "Marcar como leído" / "Marcar como no leído" y borrá. **Criterio:** el estado se ve en la lista, `progress.json` cambia, y la etiqueta sigue el formato `vNN` / `#NNN`.
+- [ ] **Recarga al volver:** cambiá algo desde otro dispositivo y volvé a la pestaña. **Criterio:** la lista se actualiza sola.

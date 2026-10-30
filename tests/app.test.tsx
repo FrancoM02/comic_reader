@@ -11,7 +11,7 @@ test('muestra el botón de entrar con Google', () => {
 
 test('con sesión muestra la biblioteca y Salir vuelve al login', () => {
   localStorage.setItem('cr.token', JSON.stringify({ accessToken: 't', expiresAt: Date.now() + 3600_000 }));
-  render(<App session={{ drive: {} as never, store: {} as never, volumesId: 'v' }} />);
+  render(<App session={{ drive: {} as never, store: { loadLibrary: async () => ({ version: 1, series: [], volumes: [] }), loadProgress: async () => ({ version: 1, volumes: {} }) } as never, volumesId: 'v' }} />);
   expect(screen.getByText('Biblioteca')).toBeTruthy();
   expect(screen.getByText('Subir').getAttribute('href')).toBe('#/upload');
   fireEvent.click(screen.getByText('Salir'));

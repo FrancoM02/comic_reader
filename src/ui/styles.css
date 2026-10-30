@@ -33,3 +33,22 @@ button {
   color: #fff;
   cursor: pointer;
 }
+
+.home { padding: 1rem; max-width: 960px; margin: 0 auto; }
+a { color: var(--accent); }
+.btn { display: inline-block; padding: 0.75rem 1.5rem; border-radius: 8px; background: var(--accent); color: #fff; text-decoration: none; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
+.card, .vol { display: flex; flex-direction: column; gap: 0.4rem; color: var(--fg); text-decoration: none; }
+.card img, .vol img, .thumb-ph { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: #222; }
+.vol { flex-direction: row; align-items: center; gap: 1rem; }
+.vol img, .vol .thumb-ph { width: 64px; }
+.title { font-size: 0.9rem; }
+.state { margin-left: auto; opacity: 0.7; font-size: 0.85rem; }
+.bar { height: 4px; background: #333; border-radius: 2px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
+.actions button { padding: 0.5rem 0.9rem; }
+.actions select { font: inherit; padding: 0.4rem; background: #222; color: var(--fg); border: 1px solid #444; border-radius: 6px; }
+.danger { background: #b3402f; }
+.volumes { list-style: none; padding: 0; }
+.volumes li { border-bottom: 1px solid #222; padding: 0.5rem 0; }

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { createDrive } from './drive';
 import { createStore } from './store';
 import { SessionContext } from './session';
+import { Home } from './ui/Home';
+import { SeriesView } from './ui/SeriesView';
 import { UploadView } from './ui/UploadView';
 import { cleanupOrphans } from './upload';
 import type { SessionDeps } from './upload';
@@ -103,26 +105,36 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
         </main>
       );
     }
+    const seriesId = hash.match(/^#\/series\/(.+)$/)?.[1];
+    const reading = hash.startsWith('#/read/');
+    const extra = (
+      <>
+        {err}
+        {cleaned.map((n) => (
+          <p role="alert" key={n}>
+            La subida de {n} se cortó, elegí el archivo de nuevo
+          </p>
+        ))}
+        {salir}
+      </>
+    );
+    const route =
+      hash === '#/upload' ? (
+        <UploadView cleaned={cleaned} />
+      ) : seriesId ? (
+        <SeriesView id={decodeURIComponent(seriesId)} />
+      ) : reading ? (
+        <main class="home">
+          <a href="#/">← Biblioteca</a>
+          <p>Lector próximamente</p>
+        </main>
+      ) : (
+        <Home extra={extra} />
+      );
     return (
       <SessionContext.Provider value={session}>
         {banner}
-        {hash === '#/upload' ? (
-          <UploadView cleaned={cleaned} />
-        ) : (
-          <main class="home">
-            <h1>Biblioteca</h1>
-            {err}
-            {cleaned.map((n) => (
-              <p role="alert" key={n}>
-                La subida de {n} se cortó, elegí el archivo de nuevo
-              </p>
-            ))}
-            <p>
-              <a href="#/upload">Subir</a>
-            </p>
-            {salir}
-          </main>
-        )}
+        {route}
       </SessionContext.Provider>
     );
   }
