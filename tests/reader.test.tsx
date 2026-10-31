@@ -104,6 +104,14 @@ test('pasar a vertical mantiene la página', async () => {
   expect(screen.getByText('3', { selector: '.reader-num' })).toBeTruthy();
 });
 
+test('en rtl el número de página va junto al inicio del slider (a la derecha) y el total a la izquierda', async () => {
+  renderReader(2);
+  await screen.findByAltText('Página 3');
+  await openMenu();
+  const nums = [...document.querySelectorAll('.reader-num')].map((n) => n.textContent);
+  expect(nums).toEqual(['4', '3']);
+});
+
 test('F alterna pantalla completa', async () => {
   Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
   const requestFullscreen = vi.fn(async () => {});

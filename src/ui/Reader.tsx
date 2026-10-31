@@ -9,6 +9,7 @@ import { useProgressSync } from './reader/useProgressSync';
 import { useZoom } from './reader/useZoom';
 import { IconBack, IconColumns, IconDirection, IconFullscreen, IconNext, IconPrev, IconRestart, IconVertical } from './icons';
 import { useWide } from './kit';
+import { StateScreen } from './shared';
 
 const PRELOAD = 3;
 
@@ -42,10 +43,9 @@ export function Reader({ volumeId }: { volumeId: string }) {
   const series = volume && lib?.series.find((s) => s.id === volume.seriesId);
   if (!lib || !volume || !series) {
     return (
-      <main class="screen">
-        <a href="#/">← Biblioteca</a>
-        {error ? <p role="alert" class="notice">{error}</p> : <p>{lib ? 'Este tomo ya no existe' : 'Cargando…'}</p>}
-      </main>
+      <StateScreen href="#/" label="Biblioteca">
+        {error ? <p role="alert" class="notice">{error}</p> : lib ? <p class="empty">Este tomo ya no existe</p> : <p class="muted">Cargando…</p>}
+      </StateScreen>
     );
   }
   return <ReaderView lib={lib} volume={volume} series={series} onSeries={onSeries} />;
@@ -193,6 +193,10 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
   const list = sortVolumes(lib.volumes.filter((v) => v.seriesId === series.id));
   const prevVol = list[list.findIndex((v) => v.id === volume.id) - 1];
   const nextVol = nextVolume(lib, volume.id);
+  const rtl = series.dir === 'rtl';
+  // El slider rtl arranca a la derecha: ahí va la página actual y a la izquierda el total.
+  const curNum = <span class="reader-num">{scrub ?? last + 1}</span>;
+  const totalNum = <span class="reader-num">{total}</span>;
   const title = `${series.name} · ${volumeName(volume.label)}`;
   const volLink = (v: Volume | undefined, label: string, icon: preact.JSX.Element) => {
     const body = wide ? <>{icon}{label}</> : icon;
@@ -259,10 +263,9 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
 
   if (sync.error) {
     return (
-      <main class="screen">
-        <a href={backHref}>← {series.name}</a>
+      <StateScreen href={backHref} label={series.name}>
         <p role="alert" class="notice">{sync.error}</p>
-      </main>
+      </StateScreen>
     );
   }
 
@@ -316,7 +319,7 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
           <div class="reader-bottom">
             <div class="reader-pages">
               {volLink(prevVol, 'Tomo anterior', <IconPrev size={20} />)}
-              <span class="reader-num">{scrub ?? last + 1}</span>
+              {rtl ? totalNum : curNum}
               <input
                 type="range"
                 aria-label="Página"
@@ -330,7 +333,7 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
                   jump(Number((e.target as HTMLInputElement).value) - 1);
                 }}
               />
-              <span class="reader-num">{total}</span>
+              {rtl ? curNum : totalNum}
               {volLink(nextVol, 'Tomo siguiente', <IconNext size={20} />)}
             </div>
             {wide ? <p class="reader-hint">← → páginas · F pantalla completa · Esc volver</p> : quick}

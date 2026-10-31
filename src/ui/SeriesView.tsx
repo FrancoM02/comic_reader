@@ -6,7 +6,7 @@ import type { Series, Volume } from '../types';
 import { deleteSeries, deleteVolume } from '../upload';
 import { IconBack, IconCheck, IconDots, IconFolderMove, IconHash, IconPencil, IconPlay, IconRestart, IconSettings, IconTrash } from './icons';
 import { Menu, Segmented, useDialog, useWide } from './kit';
-import { Thumb, useLibraryData } from './shared';
+import { StateScreen, Thumb, useLibraryData } from './shared';
 
 const DIR = { rtl: 'Der. a izq.', ltr: 'Izq. a der.' };
 const MODE = { paged: 'Páginas', vertical: 'Vertical' };
@@ -41,10 +41,9 @@ export function SeriesView({ id }: { id: string }) {
 
   if (!lib || !series) {
     return (
-      <main class="screen">
-        <a href="#/">← Biblioteca</a>
-        {!lib ? error ? <p role="alert">{error}</p> : <p>Cargando…</p> : <p>Esa serie no existe.</p>}
-      </main>
+      <StateScreen href="#/" label="Biblioteca">
+        {!lib ? error ? <p role="alert" class="notice">{error}</p> : <p class="muted">Cargando…</p> : <p class="empty">Esa serie no existe.</p>}
+      </StateScreen>
     );
   }
 

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { needsRenewal, subscribeAuth } from '../auth';
 import { useSession } from '../session';
+import { IconBack } from './icons';
+import { useWide } from './kit';
 import type { Library, ProgressFile } from '../types';
 
 const urls = new Map<string, string>();
@@ -59,4 +61,26 @@ export function useLibraryData() {
     };
   }, [reload]);
   return { lib, prog, error, reload };
+}
+
+/** Pantalla de carga / error / no encontrado: volver arriba (← en celular, botón en PC) y el aviso debajo. */
+export function StateScreen({ href, label, children }: { href: string; label: string; children: preact.ComponentChildren }) {
+  const wide = useWide();
+  return (
+    <main class="screen">
+      {wide ? (
+        <a class="btn ghost back" href={href}>
+          <IconBack size={20} />
+          {label}
+        </a>
+      ) : (
+        <header class="topbar">
+          <a class="icon-btn" href={href} aria-label={label}>
+            <IconBack />
+          </a>
+        </header>
+      )}
+      {children}
+    </main>
+  );
 }

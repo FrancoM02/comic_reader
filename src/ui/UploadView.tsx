@@ -5,7 +5,7 @@ import { makeVolumeLabel, volumeName } from '../lib/library-view';
 import { useSession } from '../session';
 import type { Library, SeriesKind } from '../types';
 import { SessionExpiredError, findDuplicate, uploadVolume } from '../upload';
-import { IconClose, IconPencil } from './icons';
+import { IconClose, IconPencil, IconUpload } from './icons';
 import { useDialog } from './kit';
 
 interface Row {
@@ -153,6 +153,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
         </p>
       ))}
       <label class="dropzone">
+        <IconUpload size={28} />
         <strong>Tocá para elegir archivos</strong>
         <span>o arrastralos acá · CBZ, CBR, PDF</span>
         <input
