@@ -54,7 +54,7 @@ test('si la sesión venció al abrir, renovar con un toque vuelve a abrir la bib
     fireEvent.click(screen.getByText('Tocá para renovar'));
   });
   expect(await screen.findByText('Berserk')).toBeTruthy();
-  expect(screen.getByText('Biblioteca')).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Biblioteca' })).toBeTruthy();
   expect(screen.queryByText(/No se pudo abrir/)).toBeNull();
   expect(screen.queryByText('Tocá para renovar')).toBeNull();
 });

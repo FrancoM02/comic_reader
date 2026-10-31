@@ -32,8 +32,8 @@ export default defineConfig({
         name: 'Comic Reader',
         short_name: 'Comic Reader',
         display: 'standalone',
-        background_color: '#111111',
-        theme_color: '#111111',
+        background_color: '#121212',
+        theme_color: '#121212',
         start_url: './',
         scope: './',
         icons: [

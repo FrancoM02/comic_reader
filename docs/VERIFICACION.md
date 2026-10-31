@@ -24,6 +24,18 @@ Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página s
 - [ ] **Formato no soportado:** elegí un archivo `.txt`. **Criterio:** aparece "Error: Formato no soportado".
 - [ ] **RAR en build de producción:** `#/dev/extract` solo prueba la rama de desarrollo del worker. Corré `npm run build && npm run preview` (o probá en el sitio desplegado, cuando la subida de la sección (b) esté publicada) con un CBR RAR4 y uno RAR5. **Criterio:** se extraen con la cantidad y orden correctos (el worker y el .wasm se sirven desde `libarchive/`).
 
+### Interfaz nueva
+
+Para revisar la interfaz sin sesión de Google abrí `http://localhost:5173/#/dev/mock` (solo existe en desarrollo): carga una biblioteca falsa en memoria, con portadas y páginas dibujadas, donde menús, diálogos y ajustes funcionan (la subida no). Probá a 375×812 y a 1400×900.
+
+- [ ] **Buscador:** en la biblioteca escribí "pokemon". **Criterio:** filtra y encuentra "Pokémon" aunque no escribas la tilde; al borrar el texto vuelven todas las series.
+- [ ] **⋮ de tomo:** en una serie tocá el ⋮ de un tomo. **Criterio:** el menú abre sin tapar ni desbordar la pantalla y ofrece cambiar número, mover, marcar leído / no leído y borrar.
+- [ ] **Ajustes de serie:** abrí los ajustes de una serie. **Criterio:** se ven nombre, tipo, sentido y modo, y cada cambio se refleja en la serie.
+- [ ] **Diálogos:** abrí un diálogo (borrar, renombrar). **Criterio:** Escape lo cierra, Tab no se escapa del diálogo y al cerrarlo el foco vuelve al botón que lo abrió.
+- [ ] **Ajustes rápidos del lector:** en el lector tocá el centro y abrí los ajustes rápidos. **Criterio:** cambiar sentido, modo o doble página se aplica en el momento, sin salir del lector.
+- [ ] **F / pantalla completa:** en el lector (PC) apretá `F`. **Criterio:** entra y sale de pantalla completa. Donde el navegador no la soporta (iPhone) no aparece el botón.
+- [ ] **Nombre largo:** la serie de 60 caracteres, a 320 px de ancho. **Criterio:** sin scroll horizontal (`document.documentElement.scrollWidth <= innerWidth`).
+
 ---
 
 ## (b) Después de publicar
@@ -60,6 +72,10 @@ Si falla el caso de la pantalla de inicio incluso con el login por redirección,
 - [ ] **Zoom:** pellizcá y hacé doble toque sobre una página. **Criterio:** hace zoom y se puede mover; mientras hay zoom, deslizar no pasa de página.
 - [ ] **Modo vertical:** en una serie en modo vertical, scrolleá. **Criterio:** las imágenes cargan antes de llegar y "Página N / total" del menú (toque) sigue la del centro.
 - [ ] **Menú y fin:** tocá el centro: título, slider, tomo anterior/siguiente y "Empezar de nuevo" (vuelve a la 1 y en otro dispositivo el tomo figura sin empezar). Al llegar a la última página aparece "Siguiente tomo". Escape vuelve a la serie.
+
+### Interfaz en iPhone
+
+- [ ] **Safe areas:** con la app instalada en la pantalla de inicio, abrí la biblioteca, una serie y el lector, en vertical y en horizontal. **Criterio:** nada queda tapado por el notch, la isla dinámica ni la barra inferior, y el menú del lector respeta los bordes.
 
 ### Dos dispositivos (PC y celular)
 

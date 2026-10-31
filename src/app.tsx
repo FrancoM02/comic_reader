@@ -3,6 +3,7 @@ import { createDrive } from './drive';
 import { createStore } from './store';
 import { SessionContext } from './session';
 import { Home } from './ui/Home';
+import { Shell } from './ui/kit';
 import { Reader } from './ui/Reader';
 import { SeriesView } from './ui/SeriesView';
 import { UploadView } from './ui/UploadView';
@@ -83,40 +84,47 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
 
   const readId = hash.match(/^#\/read\/(.+)$/)?.[1];
   const banner = needsRenewal() && (
-    <p role="alert" class={readId ? 'renew' : undefined}>
+    <p role="alert" class={readId ? 'renew' : 'notice banner'}>
       Tu sesión venció.{' '}
       <button type="button" onClick={entrar}>
         Tocá para renovar
       </button>
     </p>
   );
-  const err = error && <p role="alert">{error.startsWith('No se pudo') ? error : `No se pudo iniciar sesión: ${error}`}</p>;
+  const err = error && (
+    <p role="alert" class="notice">
+      {error.startsWith('No se pudo') ? error : `No se pudo iniciar sesión: ${error}`}
+    </p>
+  );
 
   if (signedIn) {
-    const salir = (
-      <button
-        type="button"
-        onClick={() => {
-          signOut();
-          setSession(null);
-          setSignedIn(false);
-        }}
-      >
-        Salir
-      </button>
-    );
+    const salir = () => {
+      signOut();
+      setSession(null);
+      setSignedIn(false);
+    };
     if (!session) {
       return (
-        <main class="home">
+        <main class="signin">
           {banner}
-          {sessionError ? <p role="alert">{sessionError}</p> : <p>Cargando…</p>}
+          {sessionError ? (
+            <p role="alert" class="notice">
+              {sessionError}
+            </p>
+          ) : (
+            <p>Cargando…</p>
+          )}
           {err}
           {sessionError && (
-            <button type="button" onClick={retry}>
-              Reintentar
-            </button>
-          )}{' '}
-          {sessionError && salir}
+            <div class="actions">
+              <button type="button" class="btn primary" onClick={retry}>
+                Reintentar
+              </button>
+              <button type="button" class="btn" onClick={salir}>
+                Salir
+              </button>
+            </div>
+          )}
         </main>
       );
     }
@@ -125,22 +133,22 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
       <>
         {err}
         {cleaned.map((n) => (
-          <p role="alert" key={n}>
+          <p role="alert" class="notice" key={n}>
             La subida de {n} se cortó, elegí el archivo de nuevo
           </p>
         ))}
-        {salir}
       </>
     );
+    const inShell = (view: preact.ComponentChildren) => <Shell onSignOut={salir}>{view}</Shell>;
     const route =
       hash === '#/upload' ? (
-        <UploadView cleaned={cleaned} />
+        inShell(<UploadView cleaned={cleaned} />)
       ) : seriesId ? (
-        <SeriesView id={decodeURIComponent(seriesId)} />
+        inShell(<SeriesView id={decodeURIComponent(seriesId)} />)
       ) : readId ? (
         <Reader key={readId} volumeId={decodeURIComponent(readId!)} />
       ) : (
-        <Home extra={extra} />
+        inShell(<Home extra={extra} onSignOut={salir} />)
       );
     return (
       <SessionContext.Provider value={session}>
@@ -152,7 +160,7 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
   return (
     <main class="signin">
       <h1>Comic Reader</h1>
-      <button type="button" onClick={entrar}>
+      <button type="button" class="btn primary" onClick={entrar}>
         Entrar con Google
       </button>
       {banner}

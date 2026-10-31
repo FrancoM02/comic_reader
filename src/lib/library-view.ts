@@ -42,3 +42,28 @@ export function makeVolumeLabel(number: number | null, oldLabel: string, kind: S
   const [int, dec] = String(number).split('.');
   return prefix + int.padStart(prefix === 'v' ? 2 : 3, '0') + (dec !== undefined ? `.${dec}` : '');
 }
+
+const fold = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
+export function filterSeries(series: Series[], query: string): Series[] {
+  const q = fold(query.trim());
+  return q ? series.filter((s) => fold(s.name).includes(q)) : series;
+}
+
+export function unreadCount(lib: Library, prog: ProgressFile, seriesId: string): number {
+  return lib.volumes.filter((v) => v.seriesId === seriesId && !prog.volumes[v.id]?.finished).length;
+}
+
+export function seriesResume(lib: Library, prog: ProgressFile, seriesId: string): { volume: Volume; again: boolean } | null {
+  const reading = continueReading(lib, prog).find((r) => r.series.id === seriesId);
+  if (reading) return { volume: reading.volume, again: false };
+  const vols = sortVolumes(lib.volumes.filter((v) => v.seriesId === seriesId));
+  if (!vols.length) return null;
+  const next = vols.find((v) => !prog.volumes[v.id]?.finished);
+  return next ? { volume: next, again: false } : { volume: vols[0], again: true };
+}
+
+/** `v04` → `Tomo 4`, `#012` → `#12`, vacía → `Sin número`. */
+export function volumeName(label: string): string {
+  return label ? label.replace(/^v0*(\d)/, 'Tomo $1').replace(/^#0*(\d)/, '#$1') : 'Sin número';
+}

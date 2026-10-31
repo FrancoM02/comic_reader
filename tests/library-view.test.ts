@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { continueReading, nextVolume, sortVolumes, volumeState } from '../src/lib/library-view';
+import { continueReading, filterSeries, nextVolume, seriesResume, sortVolumes, unreadCount, volumeName, volumeState } from '../src/lib/library-view';
 import type { Library, Series, Volume, VolumeProgress } from '../src/types';
 
 const s = (id: string): Series => ({ id, name: id, kind: 'manga', dir: 'rtl', mode: 'paged', createdAt: 0 });
@@ -52,4 +52,43 @@ test('makeVolumeLabel', () => {
   expect(makeVolumeLabel(7, '', 'comic')).toBe('#007');
   expect(makeVolumeLabel(7, '', 'manga')).toBe('v07');
   expect(makeVolumeLabel(null, 'v01', 'manga')).toBe('');
+});
+
+test('filterSeries ignora acentos y mayúsculas', () => {
+  const all = [s('Pokémon'), s('Berserk')];
+  expect(filterSeries(all, 'POKEMON').map((x) => x.id)).toEqual(['Pokémon']);
+  expect(filterSeries(all, '  ')).toEqual(all);
+});
+
+const lib3: Library = { version: 1, series: [s('s1'), s('s2')], volumes: [v('a', 1), v('b', 2), v('c', 3)] };
+const progOf = (volumes: Record<string, VolumeProgress>) => ({ version: 1 as const, volumes });
+
+test('unreadCount cuenta los no terminados', () => {
+  const prog = progOf({ a: p({ maxPage: 9, finished: true }), b: p({ maxPage: 2 }) });
+  expect(unreadCount(lib3, prog, 's1')).toBe(2);
+});
+
+test('seriesResume: tomo en lectura', () => {
+  const prog = progOf({ b: p({ maxPage: 2, updatedAt: 1 }) });
+  expect(seriesResume(lib3, prog, 's1')).toEqual({ volume: lib3.volumes[1], again: false });
+});
+
+test('seriesResume: sin lecturas, primer no terminado por número', () => {
+  const prog = progOf({ a: p({ maxPage: 9, finished: true }) });
+  expect(seriesResume(lib3, prog, 's1')).toEqual({ volume: lib3.volumes[1], again: false });
+});
+
+test('seriesResume: todos terminados, el primero con again', () => {
+  const prog = progOf({
+    a: p({ maxPage: 9, finished: true }), b: p({ maxPage: 9, finished: true }), c: p({ maxPage: 9, finished: true }),
+  });
+  expect(seriesResume(lib3, prog, 's1')).toEqual({ volume: lib3.volumes[0], again: true });
+});
+
+test('seriesResume: serie sin tomos', () => {
+  expect(seriesResume(lib3, progOf({}), 's2')).toBeNull();
+});
+
+test('volumeName: tomo, número y vacía', () => {
+  expect(['v04', 'v10', '#012', ''].map(volumeName)).toEqual(['Tomo 4', 'Tomo 10', '#12', 'Sin número']);
 });
