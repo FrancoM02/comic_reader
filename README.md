@@ -11,6 +11,8 @@ npm test
 npm run build
 ```
 
+Para ver la interfaz sin iniciar sesión, abrí `http://localhost:5173/#/dev/mock` (solo en desarrollo): usa una biblioteca falsa en memoria.
+
 Para desarrollar en local creá un `.env.local` con `VITE_GOOGLE_CLIENT_ID=<tu client id>`.
 
 ## Configuración (una sola vez)
