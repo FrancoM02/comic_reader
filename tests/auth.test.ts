@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { gisTransport, redirectTransport } from '../src/auth-transports';
+import { gisTransport, redirectTransport, workerTransport } from '../src/auth-transports';
 import {
   AuthInteractionRequired,
   getToken,
@@ -259,4 +259,50 @@ test('GIS: al arrancar saca #access_token de la URL y restaura la ruta', async (
   history.replaceState(null, '', '/#access_token=XYZ');
   await initAuth('cid', gisTransport('cid'));
   expect(location.hash).toBe('');
+});
+
+function fakeFetch(status: number, body: object) {
+  const f = vi.fn(async (_u: string, _i?: RequestInit) => new Response(JSON.stringify(body), { status }));
+  vi.stubGlobal('fetch', f);
+  return f;
+}
+
+test('worker: al volver guarda el refresh token y después renueva con fetch, sin navegar', async () => {
+  localStorage.setItem('cr.oauth.state', 'abc');
+  history.replaceState(null, '', '/#access_token=A&expires_in=3599&refresh_token=RT&state=abc');
+  await initAuth('cid', workerTransport('https://w.example/'));
+  expect(await getToken()).toBe('A');
+  expect(localStorage.getItem('cr.refreshToken')).toBe('RT');
+  const f = fakeFetch(200, { access_token: 'B', expires_in: 3600 });
+  const before = location.href;
+  expect(await getToken({ forceRefresh: true })).toBe('B');
+  expect(f.mock.calls[0][0]).toBe('https://w.example/refresh');
+  expect(JSON.parse(f.mock.calls[0][1]!.body as string)).toEqual({ refresh_token: 'RT' });
+  expect(location.href).toBe(before);
+  expect(needsRenewal()).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+test('worker: 401 borra el refresh token y pide un toque; un 502 no lo borra', async () => {
+  localStorage.setItem('cr.refreshToken', 'RT');
+  await initAuth('cid', workerTransport('https://w.example'));
+  expiringSession();
+  fakeFetch(502, { error: 'x' });
+  await expect(getToken({ forceRefresh: true })).rejects.not.toBeInstanceOf(AuthInteractionRequired);
+  expect(localStorage.getItem('cr.refreshToken')).toBe('RT');
+  fakeFetch(401, { error: 'invalid_grant' });
+  await expect(getToken({ forceRefresh: true })).rejects.toBeInstanceOf(AuthInteractionRequired);
+  expect(localStorage.getItem('cr.refreshToken')).toBeNull();
+  expect(needsRenewal()).toBe(true);
+  vi.unstubAllGlobals();
+});
+
+test('worker: signOut borra y revoca el refresh token', async () => {
+  localStorage.setItem('cr.refreshToken', 'RT');
+  await initAuth('cid', workerTransport('https://w.example'));
+  const f = fakeFetch(200, {});
+  signOut();
+  expect(localStorage.getItem('cr.refreshToken')).toBeNull();
+  expect(f.mock.calls[0][0]).toBe('https://oauth2.googleapis.com/revoke');
+  vi.unstubAllGlobals();
 });

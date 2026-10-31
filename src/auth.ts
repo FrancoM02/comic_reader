@@ -18,6 +18,8 @@ export interface TokenTransport {
   preload?(): Promise<void>;
   /** Renovación que navega la página (solo transporte por redirección). La página se va. */
   navigateRefresh?(): void;
+  /** Al cerrar sesión: borra y revoca lo que el transporte guarde aparte del access token. */
+  forget?(): void;
 }
 
 /** La renovación silenciosa no es posible: hace falta un toque del usuario. */
@@ -213,6 +215,7 @@ export function signOut(): void {
   flag(false);
   needsInteraction = false;
   lastError = null;
+  transport?.forget?.();
   try {
     if (token) window.google?.accounts?.oauth2?.revoke?.(token, () => {});
   } catch {

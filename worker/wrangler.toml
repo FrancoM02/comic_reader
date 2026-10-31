@@ -1,0 +1,7 @@
+name = "comic-reader-auth"
+main = "index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+APP_URL = "https://francom02.github.io/comic_reader/"
+# GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET se cargan con `wrangler secret put` (ver README).

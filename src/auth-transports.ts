@@ -1,4 +1,5 @@
 import { AuthInteractionRequired, type TokenResult, type TokenTransport } from './auth';
+import { AUTH_WORKER_URL } from './config';
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
@@ -122,7 +123,8 @@ function stripAuthHash(): { params: URLSearchParams; expected: string | null } |
   return { params, expected };
 }
 
-function authUrl(clientId: string, interactive: boolean): string {
+/** Genera el state de OAuth y guarda la ruta actual para restaurarla al volver. */
+function saveState(): string {
   const state = crypto.randomUUID();
   try {
     localStorage.setItem(K_STATE, state);
@@ -130,6 +132,25 @@ function authUrl(clientId: string, interactive: boolean): string {
   } catch {
     /* sin storage: se pierde la ruta, no la sesión */
   }
+  return state;
+}
+
+/** Lee la vuelta de OAuth del hash (validando el state). `onToken` ve los parámetros de una vuelta con token. */
+function consumeOAuthReturn(onToken?: (p: URLSearchParams) => void): TokenResult | { error: string } | null {
+  const r = stripAuthHash();
+  if (!r) return null;
+  const { params, expected } = r;
+  if (!expected || params.get('state') !== expected) return null;
+  const error = params.get('error');
+  if (error) return { error };
+  const token = params.get('access_token');
+  if (!token) return null;
+  onToken?.(params);
+  return { accessToken: token, expiresIn: Number(params.get('expires_in')) || 3600 };
+}
+
+function authUrl(clientId: string, interactive: boolean): string {
+  const state = saveState();
   const p = new URLSearchParams({
     response_type: 'token',
     client_id: clientId,
@@ -153,16 +174,66 @@ export function redirectTransport(clientId: string): TokenTransport {
     navigateRefresh() {
       location.href = authUrl(clientId, false);
     },
-    consumeReturn() {
-      const r = stripAuthHash();
-      if (!r) return null;
-      const { params, expected } = r;
-      if (!expected || params.get('state') !== expected) return null;
-      const error = params.get('error');
-      if (error) return { error };
-      const token = params.get('access_token');
-      if (!token) return null;
-      return { accessToken: token, expiresIn: Number(params.get('expires_in')) || 3600 };
+    consumeReturn: () => consumeOAuthReturn(),
+  };
+}
+
+const K_REFRESH = 'cr.refreshToken';
+
+/**
+ * Login por el Worker de `worker/`: guarda un refresh token y renueva con un fetch, sin popup ni redirección.
+ * Solo navega (a Google, vía el Worker) cuando no hay refresh token o Google ya no lo acepta.
+ */
+export function workerTransport(workerUrl: string): TokenTransport {
+  const base = workerUrl.replace(/\/+$/, '');
+  const readRt = () => {
+    try {
+      return localStorage.getItem(K_REFRESH);
+    } catch {
+      return null;
+    }
+  };
+  const dropRt = () => {
+    try {
+      localStorage.removeItem(K_REFRESH);
+    } catch {
+      /* nada */
+    }
+  };
+
+  return {
+    async request(interactive) {
+      const rt = readRt();
+      if (rt) {
+        const r = await fetch(`${base}/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
+        const j = (await r.json().catch(() => ({}))) as { access_token?: string; expires_in?: number };
+        if (r.ok && j.access_token) return { accessToken: j.access_token, expiresIn: j.expires_in ?? 3600 };
+        // Solo un 401 (refresh token revocado o vencido) borra la sesión; un error pasajero no.
+        if (r.status !== 401) throw new Error(`No se pudo renovar la sesión (${r.status})`);
+        dropRt();
+      }
+      if (!interactive) throw new AuthInteractionRequired();
+      location.href = `${base}/login?${new URLSearchParams({ state: saveState() })}`;
+      return new Promise<TokenResult>(() => {}); // la página se va; al volver lo toma consumeReturn
+    },
+    consumeReturn: () =>
+      consumeOAuthReturn((p) => {
+        const rt = p.get('refresh_token');
+        try {
+          if (rt) localStorage.setItem(K_REFRESH, rt);
+        } catch {
+          /* sin storage: sesión de una hora, como antes */
+        }
+      }),
+    forget() {
+      const rt = readRt();
+      dropRt();
+      // Revocar el refresh token corta también los access tokens. no-cors: es best-effort.
+      if (rt) fetch('https://oauth2.googleapis.com/revoke', { method: 'POST', mode: 'no-cors', body: new URLSearchParams({ token: rt }) }).catch(() => {});
     },
   };
 }
@@ -172,5 +243,6 @@ export function isIosStandalone(): boolean {
 }
 
 export function createTransport(clientId: string): TokenTransport {
+  if (AUTH_WORKER_URL) return workerTransport(AUTH_WORKER_URL);
   return isIosStandalone() ? redirectTransport(clientId) : gisTransport(clientId);
 }
