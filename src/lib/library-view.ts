@@ -62,3 +62,8 @@ export function seriesResume(lib: Library, prog: ProgressFile, seriesId: string)
   const next = vols.find((v) => !prog.volumes[v.id]?.finished);
   return next ? { volume: next, again: false } : { volume: vols[0], again: true };
 }
+
+/** `v04` → `Tomo 4`, `#012` → `#12`, vacía → `Sin número`. */
+export function volumeName(label: string): string {
+  return label ? label.replace(/^v0*(\d)/, 'Tomo $1').replace(/^#0*(\d)/, '#$1') : 'Sin número';
+}

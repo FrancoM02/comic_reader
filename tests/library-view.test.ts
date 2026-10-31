@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { continueReading, filterSeries, nextVolume, seriesResume, sortVolumes, unreadCount, volumeState } from '../src/lib/library-view';
+import { continueReading, filterSeries, nextVolume, seriesResume, sortVolumes, unreadCount, volumeName, volumeState } from '../src/lib/library-view';
 import type { Library, Series, Volume, VolumeProgress } from '../src/types';
 
 const s = (id: string): Series => ({ id, name: id, kind: 'manga', dir: 'rtl', mode: 'paged', createdAt: 0 });
@@ -87,4 +87,8 @@ test('seriesResume: todos terminados, el primero con again', () => {
 
 test('seriesResume: serie sin tomos', () => {
   expect(seriesResume(lib3, progOf({}), 's2')).toBeNull();
+});
+
+test('volumeName: tomo, número y vacía', () => {
+  expect(['v04', 'v10', '#012', ''].map(volumeName)).toEqual(['Tomo 4', 'Tomo 10', '#12', 'Sin número']);
 });

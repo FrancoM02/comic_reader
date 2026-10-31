@@ -96,7 +96,7 @@ test('con redirección o con token de sobra no pide renovar', async () => {
   expect(uploadVolume).toHaveBeenCalledTimes(1);
 });
 
-test('SeriesView muestra "Leyendo NN%"', async () => {
+test('SeriesView muestra el porcentaje leído', async () => {
   const l: Library = {
     ...lib,
     volumes: [{ id: 'a', seriesId: 'S', number: 1, label: '#001', pageCount: 10, folderId: 'f', pageFileIds: [], thumbFileId: 't', uploadedAt: 0 }],
@@ -114,5 +114,5 @@ test('SeriesView muestra "Leyendo NN%"', async () => {
       <SeriesView id="S" />
     </SessionContext.Provider>,
   );
-  expect(await screen.findByText('Leyendo 50%')).toBeTruthy();
+  expect(await screen.findByText('50%')).toBeTruthy();
 });

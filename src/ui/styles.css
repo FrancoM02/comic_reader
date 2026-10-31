@@ -459,6 +459,39 @@ button:not([class]):not([role]),
   .series-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 }
 
+/* ============ Serie ============ */
+.grow { flex: 1; }
+.back { align-self: flex-start; margin-bottom: var(--s3); }
+.series-head { display: flex; gap: var(--s4); align-items: flex-start; }
+.series-cover { flex: none; width: 84px; }
+.series-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s2); }
+.series-info h1 { font-size: 1.3rem; overflow-wrap: anywhere; }
+.series-meta { color: var(--muted-2); font-size: 0.9rem; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.resume-btn { width: 100%; margin: var(--s4) 0; justify-content: center; gap: var(--s2); }
+.vol-list { list-style: none; padding: 0; }
+.vol-row { display: flex; align-items: center; gap: var(--s1); border-bottom: 1px solid var(--border); }
+.vol-row.done .vol-link { opacity: 0.5; }
+.vol-link {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: 48px 1fr auto; column-gap: var(--s3); row-gap: 6px;
+  align-items: center; padding: var(--s2) 0; color: var(--fg); text-decoration: none;
+}
+.vol-thumb { grid-row: 1 / 3; width: 48px; aspect-ratio: 2 / 3; border-radius: var(--radius); overflow: hidden; background: var(--surface-2); }
+.vol-thumb img, .vol-thumb .thumb-ph { width: 100%; height: 100%; object-fit: cover; }
+.vol-link .bar { grid-column: 2 / 4; }
+.vol-state { color: var(--muted); font-size: 0.85rem; }
+.menu-group { display: flex; flex-direction: column; gap: 6px; padding: var(--s2) var(--s4); color: var(--muted-2); font-size: 0.85rem; }
+@media (min-width: 900px) {
+  .series-layout { display: grid; grid-template-columns: 190px 1fr; gap: var(--s6); align-items: start; }
+  .series-head { flex-direction: column; }
+  .series-cover { width: 100%; }
+  .vol-head, .vol-link { grid-template-columns: 40px 1fr 200px 90px; }
+  .vol-head { display: grid; column-gap: var(--s3); padding: var(--s2) calc(var(--tap) + var(--s1)) var(--s2) 0; color: var(--muted); font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+  .vol-head span:first-child { grid-column: 1 / 3; }
+  .vol-thumb { grid-row: auto; width: 40px; }
+  .vol-link .bar { grid-column: auto; }
+}
+
 /* ============ Pantallas sueltas y vistas viejas (las reemplazan las tareas siguientes) ============ */
 .signin {
   min-height: 100vh;

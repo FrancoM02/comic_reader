@@ -1,13 +1,8 @@
 import { useState } from 'preact/hooks';
-import { continueReading, filterSeries, sortVolumes, unreadCount } from '../lib/library-view';
+import { continueReading, filterSeries, sortVolumes, unreadCount, volumeName } from '../lib/library-view';
 import { IconClose, IconDots, IconLogout, IconPlus, IconSearch } from './icons';
 import { Menu, useWide } from './kit';
 import { Thumb, useLibraryData } from './shared';
-
-/** `v04` → `Tomo 4`, `#012` → `#12`, vacía → `Sin número`. */
-function volumeName(label: string) {
-  return label ? label.replace(/^v0*(\d)/, 'Tomo $1').replace(/^#0*(\d)/, '#$1') : 'Sin número';
-}
 
 export function Home({ extra, onSignOut }: { extra?: preact.ComponentChildren; onSignOut: () => void }) {
   const { lib, prog, error } = useLibraryData();
