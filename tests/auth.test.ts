@@ -306,3 +306,8 @@ test('worker: signOut borra y revoca el refresh token', async () => {
   expect(f.mock.calls[0][0]).toBe('https://oauth2.googleapis.com/revoke');
   vi.unstubAllGlobals();
 });
+
+test('worker: usesRedirect es true, para que la subida no llame a signIn (que puede navegar)', async () => {
+  await initAuth('cid', workerTransport('https://w.example'));
+  expect(usesRedirect()).toBe(true);
+});

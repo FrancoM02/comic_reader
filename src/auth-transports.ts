@@ -202,6 +202,8 @@ export function workerTransport(workerUrl: string): TokenTransport {
   };
 
   return {
+    // Sin refresh token válido, signIn va a Google: la subida no debe llamarlo (perdería los archivos).
+    signInNavigates: true,
     async request(interactive) {
       const rt = readRt();
       if (rt) {

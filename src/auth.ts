@@ -18,6 +18,8 @@ export interface TokenTransport {
   preload?(): Promise<void>;
   /** Renovación que navega la página (solo transporte por redirección). La página se va. */
   navigateRefresh?(): void;
+  /** true si un signIn interactivo puede navegar la página (y perder lo que haya en pantalla). */
+  signInNavigates?: boolean;
   /** Al cerrar sesión: borra y revoca lo que el transporte guarde aparte del access token. */
   forget?(): void;
 }
@@ -186,9 +188,9 @@ export function tokenMinutesLeft(): number {
   return s ? Math.max(0, (s.expiresAt - Date.now()) / 60_000) : 0;
 }
 
-/** true si renovar navega la página (iPhone instalado): no se puede pedir un toque sin irse. */
+/** true si renovar o iniciar sesión puede navegar la página (iPhone instalado, Worker): no se puede pedir un toque sin irse. */
 export function usesRedirect(): boolean {
-  return !!transport?.navigateRefresh;
+  return !!(transport?.navigateRefresh || transport?.signInNavigates);
 }
 
 /** Renueva de forma proactiva si es seguro (sin trabajo en curso). Con redirección, la página se va. */
