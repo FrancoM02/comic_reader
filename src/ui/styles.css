@@ -397,7 +397,7 @@ button:not([class]):not([role]),
 .segmented button {
   flex: 1;
   min-width: 0;
-  min-height: 38px;
+  min-height: var(--tap);
   padding: 0 var(--s2);
   border: 0;
   border-radius: 7px;
