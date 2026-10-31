@@ -95,7 +95,7 @@ test('pasar a vertical mantiene la página', async () => {
   await screen.findByAltText('Página 3');
   await openMenu();
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: /Páginas/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Modo: páginas/ }));
   });
   expect(updateLibrary).toHaveBeenCalledTimes(1);
   expect(series().mode).toBe('vertical');

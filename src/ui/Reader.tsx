@@ -240,7 +240,7 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
       </button>
       <button type="button" class="chip" onClick={() => patch({ mode: vertical ? 'paged' : 'vertical' })}>
         {vertical ? <IconVertical size={16} /> : <IconColumns size={16} />}
-        {vertical ? 'Vertical' : 'Páginas'}
+        Modo: {vertical ? 'vertical (con scroll)' : 'páginas'}
       </button>
       {/* En celular (< 900 px) nunca entra la doble página, así que el chip es solo de PC. */}
       {wide && (
@@ -336,7 +336,7 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
               {rtl ? curNum : totalNum}
               {volLink(nextVol, 'Tomo siguiente', <IconNext size={20} />)}
             </div>
-            {wide ? <p class="reader-hint">← → páginas{document.fullscreenEnabled ? ' · F pantalla completa' : ''} · Esc volver</p> : quick}
+            {wide ? <p class="reader-hint">{vertical ? 'Scroll para leer' : '← → páginas'}{document.fullscreenEnabled ? ' · F pantalla completa' : ''} · Esc volver</p> : quick}
             {sync.unsaved && <p role="status" class="notice">Progreso sin guardar</p>}
             {menuError && <p role="alert" class="notice">{menuError}</p>}
           </div>
