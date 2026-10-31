@@ -57,6 +57,10 @@ export function needsRenewal(): boolean {
 export function lastAuthError(): string | null {
   return lastError;
 }
+/** true mientras hay una subida en curso. */
+export function isBusy(): boolean {
+  return busy > 0;
+}
 /** Los flujos largos (subidas) lo marcan para que no se renueve por redirección. */
 export function setBusy(b: boolean): void {
   busy = Math.max(0, busy + (b ? 1 : -1));

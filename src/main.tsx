@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { App } from './app';
-import { initAuth } from './auth';
+import { initAuth, isBusy } from './auth';
 import { GOOGLE_CLIENT_ID } from './config';
 import './ui/styles.css';
 
@@ -8,7 +8,10 @@ const root = document.getElementById('app')!;
 
 // Tras un deploy, una pestaña vieja pide chunks que ya no existen: recargar trae la versión nueva.
 // Una vez por minuto como mucho, para no entrar en bucle si el chunk falla por otra causa.
+// Durante una subida no: recargar perdería los archivos elegidos (y el aviso de salir la frena);
+// el error sigue de largo y extractPages lo explica.
 addEventListener('vite:preloadError', (e) => {
+  if (isBusy()) return;
   try {
     if (Date.now() - Number(sessionStorage.getItem('cr.reloadedAt') ?? 0) < 60_000) return;
     sessionStorage.setItem('cr.reloadedAt', String(Date.now()));
