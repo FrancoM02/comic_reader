@@ -7,6 +7,7 @@ import { Shell } from './ui/kit';
 import { Reader } from './ui/Reader';
 import { SeriesView } from './ui/SeriesView';
 import { UploadView } from './ui/UploadView';
+import { IconClose } from './ui/icons';
 import { cleanupOrphans } from './upload';
 import type { SessionDeps } from './upload';
 import { getToken, isSignedIn, lastAuthError, needsRenewal, refreshIfIdle, signIn, signOut, subscribeAuth } from './auth';
@@ -133,8 +134,11 @@ export function App({ session: injected }: { session?: SessionDeps } = {}) {
       <>
         {err}
         {cleaned.map((n) => (
-          <p role="alert" class="notice" key={n}>
+          <p role="alert" class="notice notice-dismiss" key={n}>
             La subida de {n} se cortó, elegí el archivo de nuevo
+            <button type="button" class="icon-btn" aria-label="Cerrar aviso" onClick={() => setCleaned((cs) => cs.filter((c) => c !== n))}>
+              <IconClose size={16} />
+            </button>
           </p>
         ))}
       </>

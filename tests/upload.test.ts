@@ -146,11 +146,21 @@ describe('uploadVolume', () => {
     expect((await store.loadProgress()).volumes.old).toBeUndefined();
   });
 
-  it('si falla no toca library.json y deja el marcador', async () => {
+  it('si falla no toca library.json, manda la carpeta a la papelera y saca el marcador', async () => {
     const { deps, store } = await setup();
     deps.drive.uploadBlob = async () => { throw new Error('boom'); };
+    const trash = vi.spyOn(deps.drive, 'trashFile');
     await expect(uploadVolume({ file, seriesId: 'S', newSeries: { name: 'A', kind: 'comic' }, number: 1, label: 'x' }, deps, () => {})).rejects.toThrow('boom');
     expect((await store.loadLibrary()).series).toEqual([]);
+    expect(trash).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('cr.pendingUpload')).toBeNull();
+  });
+
+  it('si falla y tampoco se puede mandar a la papelera, el marcador queda para el próximo arranque', async () => {
+    const { deps } = await setup();
+    deps.drive.uploadBlob = async () => { throw new Error('boom'); };
+    deps.drive.trashFile = async () => { throw new Error('sin red'); };
+    await expect(uploadVolume({ file, seriesId: 'S', newSeries: { name: 'A', kind: 'comic' }, number: 1, label: 'x' }, deps, () => {})).rejects.toThrow('boom');
     expect(localStorage.getItem('cr.pendingUpload')).not.toBeNull();
   });
 });
@@ -280,7 +290,7 @@ describe('uploadVolume: verificación de library.json', () => {
     });
     await expect(uploadVolume(args, deps, () => {})).rejects.toThrow('No se pudo registrar');
     expect(update).toHaveBeenCalledTimes(2);
-    expect(localStorage.getItem('cr.pendingUpload')).not.toBeNull();
+    expect(localStorage.getItem('cr.pendingUpload')).toBeNull(); // la carpeta ya fue a la papelera
   });
 
   it('si falla borrar el tomo reemplazado, la subida igual sale bien (console.warn)', async () => {

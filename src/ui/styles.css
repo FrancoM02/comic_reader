@@ -296,6 +296,14 @@ button:not([class]):not([role]) {
   font-size: 0.9rem;
 }
 
+.notice-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.notice-dismiss .icon-btn { flex: none; margin: calc(-1 * var(--s2)) calc(-1 * var(--s2)) calc(-1 * var(--s2)) 0; color: inherit; }
+
 .empty {
   display: flex;
   flex-direction: column;

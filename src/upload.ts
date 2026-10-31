@@ -66,10 +66,12 @@ export async function uploadVolume(
   const { drive, store, volumesId } = deps;
   const { file, seriesId, newSeries, number, label, replaceVolumeId } = args;
   setBusy(true);
+  let createdFolder: string | undefined;
   try {
     const { total, pages } = await (deps.extract ?? extractPages)(file);
     const volumeId = crypto.randomUUID();
     const folderId = await drive.findOrCreateFolder(volumeId, volumesId);
+    createdFolder = folderId;
     setPending({ folderId, fileName: file.name });
 
     const pageFileIds: string[] = new Array(total);
@@ -141,6 +143,16 @@ export async function uploadVolume(
     if (e instanceof AuthInteractionRequired) {
       // El marcador queda: cleanupOrphans manda la carpeta parcial a la papelera en el próximo arranque.
       throw new SessionExpiredError('Tu sesión venció — tocá para renovar y volvé a subir el archivo');
+    }
+    // El error ya se muestra en la fila: limpiar ahora para que el próximo arranque no avise "se cortó".
+    // Si la papelera falla (sin red), el marcador queda y lo limpia cleanupOrphans.
+    if (createdFolder) {
+      try {
+        await drive.trashFile(createdFolder);
+        setPending(null);
+      } catch {
+        /* queda para el próximo arranque */
+      }
     }
     throw e;
   } finally {
