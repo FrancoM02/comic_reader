@@ -440,6 +440,25 @@ button:not([class]):not([role]),
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
+/* ============ Biblioteca ============ */
+.section-title { margin: var(--s5) 0 var(--s3); }
+.topbar .search-wide { flex: 0 1 320px; }
+.topbar > .btn { margin-right: var(--s2); }
+.cover-title.ellipsis { white-space: normal; }
+.series-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3); }
+.rail { display: flex; gap: var(--s3); overflow-x: auto; margin: 0 calc(-1 * var(--s4)); padding: 0 var(--s4) var(--s2); scroll-snap-type: x proximity; }
+.resume { flex: 0 0 120px; min-width: 0; display: flex; flex-direction: column; gap: 6px; color: var(--fg); text-decoration: none; font-size: 0.85rem; scroll-snap-align: start; }
+.resume-text { color: var(--muted); font-size: 0.8rem; }
+.resume-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3); }
+.resume-card { display: flex; gap: var(--s3); align-items: center; }
+.resume-thumb { flex: none; width: 56px; aspect-ratio: 2 / 3; border-radius: var(--radius); overflow: hidden; background: var(--surface-2); }
+.resume-thumb img, .resume-thumb .thumb-ph { width: 100%; height: 100%; object-fit: cover; }
+.resume-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+.banner { margin: 0; border-width: 0 0 1px; border-radius: 0; text-align: center; }
+@media (min-width: 900px) {
+  .series-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+}
+
 /* ============ Pantallas sueltas y vistas viejas (las reemplazan las tareas siguientes) ============ */
 .signin {
   min-height: 100vh;
