@@ -145,7 +145,7 @@ test('tokenMinutesLeft y usesRedirect', async () => {
   expect(tokenMinutesLeft()).toBe(60);
 });
 
-test('signOut limpia el aviso de renovación, las marcas y revoca el token en GIS', async () => {
+test('signOut limpia el aviso de renovación y las marcas, sin revocar en Google (cerraría los otros dispositivos)', async () => {
   const revoke = vi.fn();
   window.google = { accounts: { oauth2: { initTokenClient: vi.fn(), revoke } } };
   await initAuth('cid', { request: vi.fn(async () => { throw new AuthInteractionRequired(); }) });
@@ -158,7 +158,7 @@ test('signOut limpia el aviso de renovación, las marcas y revoca el token en GI
   expect(needsRenewal()).toBe(false);
   expect(localStorage.getItem('cr.noAutoRefresh')).toBeNull();
   expect(localStorage.getItem('cr.pendingUpload')).toBeNull();
-  expect(revoke).toHaveBeenCalledWith('old', expect.any(Function));
+  expect(revoke).not.toHaveBeenCalled();
 });
 
 test('redirect: #error se informa, y no se reintenta solo', async () => {
@@ -297,13 +297,13 @@ test('worker: 401 borra el refresh token y pide un toque; un 502 no lo borra', a
   vi.unstubAllGlobals();
 });
 
-test('worker: signOut borra y revoca el refresh token', async () => {
+test('worker: signOut borra el refresh token de este dispositivo sin revocarlo', async () => {
   localStorage.setItem('cr.refreshToken', 'RT');
   await initAuth('cid', workerTransport('https://w.example'));
   const f = fakeFetch(200, {});
   signOut();
   expect(localStorage.getItem('cr.refreshToken')).toBeNull();
-  expect(f.mock.calls[0][0]).toBe('https://oauth2.googleapis.com/revoke');
+  expect(f).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
 });
 

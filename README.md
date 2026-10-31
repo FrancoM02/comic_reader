@@ -68,7 +68,7 @@ Sin esto, el token de Google dura 1 h y la app te pide renovar seguido. Con el W
    ```
 4. En GitHub, Variables: `VITE_AUTH_WORKER_URL` = la URL que imprimió `wrangler deploy` (ej. `https://comic-reader-auth.<tu-subdominio>.workers.dev`). Volvé a desplegar.
 
-Si la variable no está, la app usa el login de antes (GIS / redirección). El refresh token queda en `localStorage`: solo sirve a través del Worker y se revoca al cerrar sesión.
+Si la variable no está, la app usa el login de antes (GIS / redirección). El refresh token queda en `localStorage`: solo sirve a través del Worker. "Salir" lo borra de ese dispositivo sin revocarlo, así los demás siguen con sesión; para cortar el acceso en todos lados, quitá Comic Reader en <https://myaccount.google.com/permissions>.
 
 ### 4. Verificar en dispositivos
 

@@ -20,7 +20,7 @@ export interface TokenTransport {
   navigateRefresh?(): void;
   /** true si un signIn interactivo puede navegar la página (y perder lo que haya en pantalla). */
   signInNavigates?: boolean;
-  /** Al cerrar sesión: borra y revoca lo que el transporte guarde aparte del access token. */
+  /** Al cerrar sesión: borra lo que el transporte guarde aparte del access token (sin revocar). */
   forget?(): void;
 }
 
@@ -210,8 +210,11 @@ export async function refreshIfIdle(): Promise<void> {
   await getToken({ forceRefresh: true }).catch(() => {});
 }
 
+/**
+ * Cierra la sesión solo en este dispositivo. No revoca en Google: revocar un token corta el permiso
+ * de la app para la cuenta entera, y los demás dispositivos tendrían que volver a entrar.
+ */
 export function signOut(): void {
-  const token = read()?.accessToken;
   try {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('cr.pendingUpload');
@@ -222,10 +225,5 @@ export function signOut(): void {
   needsInteraction = false;
   lastError = null;
   transport?.forget?.();
-  try {
-    if (token) window.google?.accounts?.oauth2?.revoke?.(token, () => {});
-  } catch {
-    /* revocar es best-effort */
-  }
   notify();
 }

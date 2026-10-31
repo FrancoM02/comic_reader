@@ -231,12 +231,7 @@ export function workerTransport(workerUrl: string): TokenTransport {
           /* sin storage: sesión de una hora, como antes */
         }
       }),
-    forget() {
-      const rt = readRt();
-      dropRt();
-      // Revocar el refresh token corta también los access tokens. no-cors: es best-effort.
-      if (rt) fetch('https://oauth2.googleapis.com/revoke', { method: 'POST', mode: 'no-cors', body: new URLSearchParams({ token: rt }) }).catch(() => {});
-    },
+    forget: dropRt,
   };
 }
 
