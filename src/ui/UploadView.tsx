@@ -6,7 +6,8 @@ import { useSession } from '../session';
 import type { Library, SeriesKind } from '../types';
 import { SessionExpiredError, findDuplicate, uploadVolume } from '../upload';
 import { IconClose, IconPencil, IconUpload } from './icons';
-import { useDialog } from './kit';
+import { LIBRARY_CHANGED } from './shared';
+import { useDialog, type DialogOpts, type DialogResult } from './kit';
 
 interface Row {
   key: number;
@@ -28,32 +29,61 @@ const toRow = (file: File): Row => {
   return { key: ++seq, file, series: p.series, number: p.number === null ? '' : String(p.number), label: p.label, kind: 'manga', status: 'pendiente', done: 0, total: 0, open: !p.series.trim() };
 };
 
+/*
+ * La cola vive fuera del componente: si te vas a otra pantalla, la subida sigue y al volver se ve el progreso.
+ * Lo único que necesita la pantalla montada es la pregunta de tomo duplicado (queda en `question` hasta que vuelvas).
+ */
+interface Question {
+  opts: DialogOpts;
+  resolve: (r: DialogResult) => void;
+}
+let q = { rows: [] as Row[], running: false, run: { cur: 0, total: 0 }, question: null as Question | null };
+const subs = new Set<() => void>();
+function setQ(p: Partial<typeof q>) {
+  q = { ...q, ...p };
+  subs.forEach((f) => f());
+}
+const setRows = (f: (rs: Row[]) => Row[]) => setQ({ rows: f(q.rows) });
+const patch = (key: number, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
+const askQ = (opts: DialogOpts) => new Promise<DialogResult>((resolve) => setQ({ question: { opts, resolve } }));
+const preventUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+/** Solo para tests: vacía la cola entre casos. */
+export function resetUploadQueue(): void {
+  q = { rows: [], running: false, run: { cur: 0, total: 0 }, question: null };
+}
+
 export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
   const session = useSession();
   const [lib, setLib] = useState<Library | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [running, setRunning] = useState(false);
-  const [run, setRun] = useState({ cur: 0, total: 0 });
-  const [wait, setWait] = useState(false);
+  const [, rerender] = useState(0);
   const [dialog, ask] = useDialog();
+  const { rows, running, run, question } = q;
+
+  useEffect(() => {
+    const f = () => rerender((n) => n + 1);
+    subs.add(f);
+    return () => void subs.delete(f);
+  }, []);
 
   useEffect(() => {
     session.store.loadLibrary().then(setLib, () => {});
   }, [session]);
 
   useEffect(() => {
-    if (!running) return;
-    const f = (e: BeforeUnloadEvent) => e.preventDefault();
-    addEventListener('beforeunload', f);
-    return () => removeEventListener('beforeunload', f);
-  }, [running]);
+    if (!question) return;
+    ask(question.opts).then((r) => {
+      if (q.question !== question) return;
+      setQ({ question: null });
+      question.resolve(r);
+    });
+  }, [question]);
 
-  const patch = (key: number, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
   const add = (files: FileList | File[] | null) => files && setRows((rs) => [...rs, ...Array.from(files).map(toRow)]);
   const findSeries = (lb: Library, name: string) => lb.series.find((s) => s.name.trim().toLowerCase() === name.trim().toLowerCase());
 
   async function subir() {
-    setRunning(true);
+    setQ({ running: true });
+    addEventListener('beforeunload', preventUnload);
     setBusy(true); // por lote: entre tomo y tomo tampoco debe renovarse por redirección
     try {
       // Corre dentro del clic: si el token vence pronto, renovarlo ahora (un toque) y no a mitad de la subida.
@@ -63,7 +93,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
       const total = rows.filter((r) => r.status !== 'listo').length;
       for (const r of rows) {
         if (r.status === 'listo') continue;
-        setRun({ cur: ++cur, total });
+        setQ({ run: { cur: ++cur, total } });
         const current = await session.store.loadLibrary();
         const existing = findSeries(current, r.series);
         const number = r.number.trim() === '' ? null : Number(r.number);
@@ -77,7 +107,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
         if (d) {
           const a =
             (
-              await ask({
+              await askQ({
                 title: 'Tomo duplicado',
                 message: `Ya tenés el tomo ${r.number} de ${r.series}.`,
                 actions: [
@@ -108,6 +138,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
             (done, total) => patch(r.key, { done, total }),
           );
           patch(r.key, { status: 'listo' });
+          dispatchEvent(new Event(LIBRARY_CHANGED)); // la biblioteca, si está abierta, muestra el tomo nuevo
         } catch (e) {
           patch(r.key, { status: 'error', error: e instanceof Error ? e.message : 'Error desconocido' });
           if (e instanceof SessionExpiredError) break;
@@ -116,8 +147,8 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
       setLib(await session.store.loadLibrary());
     } finally {
       setBusy(false);
-      setRunning(false);
-      setWait(false);
+      removeEventListener('beforeunload', preventUnload);
+      setQ({ running: false });
     }
   }
 
@@ -136,19 +167,13 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
       }}
     >
       <header class="topbar">
-        {running ? (
-          <button type="button" class="icon-btn" aria-label="Volver" aria-disabled="true" onClick={() => setWait(true)}>
-            <IconClose />
-          </button>
-        ) : (
-          <a class="icon-btn" href="#/" aria-label="Volver">
-            <IconClose />
-          </a>
-        )}
+        <a class="icon-btn" href="#/" aria-label="Volver">
+          <IconClose />
+        </a>
         <h1>Subir</h1>
       </header>
-      {running && wait && <p class="notice">Esperá a que termine la subida</p>}
-      {cleaned.map((n) => (
+      {running && <p class="notice">Podés ir a otra pantalla: la subida sigue. No cierres la pestaña.</p>}
+      {cleaned.filter((n) => !rows.some((r) => r.file.name === n)).map((n) => (
         <p role="alert" class="notice" key={n}>
           La subida de {n} se cortó, elegí el archivo de nuevo
         </p>

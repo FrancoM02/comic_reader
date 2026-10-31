@@ -54,7 +54,7 @@ export interface DialogOpts {
   actions: DialogAction[];
 }
 
-type DialogResult = { action: string | null; text: string };
+export type DialogResult = { action: string | null; text: string };
 
 function Dialog({ opts, done }: { opts: DialogOpts; done: (action: string | null, text: string) => void }) {
   const [text, setText] = useState(opts.input?.value ?? '');

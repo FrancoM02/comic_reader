@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { setBusy, signIn, tokenMinutesLeft, usesRedirect } from '../src/auth';
 import { SessionContext } from '../src/session';
@@ -16,7 +16,7 @@ vi.mock('../src/upload', async (orig) => ({
   ...(await orig<typeof import('../src/upload')>()),
   uploadVolume: vi.fn(async () => ({})),
 }));
-import { UploadView } from '../src/ui/UploadView';
+import { UploadView, resetUploadQueue } from '../src/ui/UploadView';
 import { SeriesView } from '../src/ui/SeriesView';
 
 const lib: Library = {
@@ -52,6 +52,7 @@ const editAll = () => screen.getAllByRole('button', { name: /^Editar / }).forEac
 const labels = () => vi.mocked(uploadVolume).mock.calls.map((c) => c[0].label);
 
 beforeEach(() => {
+  resetUploadQueue();
   vi.mocked(uploadVolume).mockClear();
   vi.mocked(setBusy).mockClear();
   vi.mocked(signIn).mockClear();
@@ -154,32 +155,61 @@ test('SeriesView muestra el porcentaje leído', async () => {
   expect(await screen.findByText('50%')).toBeTruthy();
 });
 
-test('el aviso de esperar no se arrastra al siguiente lote', async () => {
+test('si salís de Subir a mitad de la subida, sigue y al volver se ve el progreso', async () => {
   let release = () => {};
   vi.mocked(uploadVolume).mockImplementationOnce(() => new Promise((r) => (release = () => r({} as never))));
   await renderWith(['A v01.cbz']);
-  const subirBtn = () => screen.getByRole('button', { name: /^(Subir \d+ archivos?|Subiendo.*)$/ });
   await act(async () => {
-    fireEvent.click(subirBtn());
+    fireEvent.click(screen.getByRole('button', { name: /^Subir \d+ archivos?$/ }));
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Volver' }));
-  expect(screen.getByText('Esperá a que termine la subida')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Volver' })).toBeTruthy(); // salir no está bloqueado
+  cleanup(); // te fuiste a Biblioteca: la pantalla se desmonta
+  const changed = vi.fn();
+  addEventListener('cr:library-changed', changed);
   await act(async () => {
     release();
   });
-  await waitFor(() => expect(screen.queryByText(/^Subiendo/)).toBeNull());
-  // Segundo lote: el tomo anterior ya quedó subido, se agrega otro.
+  expect(changed).toHaveBeenCalledTimes(1); // la biblioteca abierta se recarga
+  removeEventListener('cr:library-changed', changed);
+  render(
+    <SessionContext.Provider value={session()}>
+      <UploadView />
+    </SessionContext.Provider>,
+  );
+  expect(screen.getByText('A v01.cbz')).toBeTruthy();
+  expect(screen.getByText('Listo')).toBeTruthy();
+});
+
+test('la pregunta de tomo duplicado espera a que vuelvas a Subir', async () => {
+  const dup: Library = { ...lib, volumes: [{ id: 'V1', seriesId: 'S', number: 1, label: '1', pageCount: 1, folderId: 'f', pageFileIds: ['p'], thumbFileId: 't', uploadedAt: 0 }] };
+  await renderWith(['Batman v01.cbz'], dup);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /^Subir \d+ archivos?$/ }));
+  });
+  await screen.findByText(/Ya tenés el tomo/);
+  cleanup();
+  render(
+    <SessionContext.Provider value={session(dup)}>
+      <UploadView />
+    </SessionContext.Provider>,
+  );
+  await act(async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Subir igual' }));
+  });
+  await waitFor(() => expect(uploadVolume).toHaveBeenCalledTimes(1));
+});
+
+test('el aviso de subida cortada desaparece al volver a elegir ese archivo', async () => {
+  render(
+    <SessionContext.Provider value={session()}>
+      <UploadView cleaned={['A v01.cbz']} />
+    </SessionContext.Provider>,
+  );
+  expect(screen.getByText(/La subida de A v01.cbz se cortó/)).toBeTruthy();
   const input = document.querySelector('input[type=file]') as HTMLInputElement;
-  Object.defineProperty(input, 'files', { value: [new File(['z'], 'A v02.cbz')], configurable: true });
+  Object.defineProperty(input, 'files', { value: [new File(['z'], 'A v01.cbz')], configurable: true });
   await act(async () => {
     fireEvent.change(input);
   });
-  vi.mocked(uploadVolume).mockImplementationOnce(() => new Promise((r) => (release = () => r({} as never))));
-  await act(async () => {
-    fireEvent.click(subirBtn());
-  });
-  expect(screen.queryByText('Esperá a que termine la subida')).toBeNull();
-  await act(async () => {
-    release();
-  });
+  expect(screen.queryByText(/se cortó/)).toBeNull();
 });

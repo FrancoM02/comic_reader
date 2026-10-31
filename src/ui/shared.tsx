@@ -5,6 +5,9 @@ import { IconBack } from './icons';
 import { useWide } from './kit';
 import type { Library, ProgressFile } from '../types';
 
+/** Evento de window: una subida agregó un tomo a library.json. */
+export const LIBRARY_CHANGED = 'cr:library-changed';
+
 const urls = new Map<string, string>();
 
 /** Miniatura de Drive; las URLs se cachean toda la sesión. */
@@ -49,6 +52,7 @@ export function useLibraryData() {
     reload();
     const f = () => document.visibilityState === 'visible' && reload();
     document.addEventListener('visibilitychange', f);
+    addEventListener(LIBRARY_CHANGED, reload);
     let expired = needsRenewal();
     const unsub = subscribeAuth(() => {
       const now = needsRenewal();
@@ -57,6 +61,7 @@ export function useLibraryData() {
     });
     return () => {
       document.removeEventListener('visibilitychange', f);
+      removeEventListener(LIBRARY_CHANGED, reload);
       unsub();
     };
   }, [reload]);
