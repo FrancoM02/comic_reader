@@ -140,7 +140,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
           patch(r.key, { status: 'listo' });
           dispatchEvent(new Event(LIBRARY_CHANGED)); // la biblioteca, si está abierta, muestra el tomo nuevo
         } catch (e) {
-          patch(r.key, { status: 'error', error: e instanceof Error ? e.message : 'Error desconocido' });
+          patch(r.key, { status: 'error', error: (e instanceof Error && e.message) || 'Error desconocido' });
           if (e instanceof SessionExpiredError) break;
         }
       }

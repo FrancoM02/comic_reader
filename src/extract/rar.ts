@@ -1,37 +1,27 @@
+import { createExtractorFromData } from 'node-unrar-js';
+import wasmUrl from 'node-unrar-js/dist/js/unrar.wasm?url';
 import { imageMime, isImageEntry, naturalCompare } from '../lib/sort';
-import { withCleanup } from './cleanup';
 import type { Extraction, Page } from './types';
 
-// El worker (módulo) carga libarchive.wasm junto a sí mismo. En build, el plugin de
-// vite.config.ts los emite en libarchive/; en dev se sirven desde node_modules.
-async function workerUrl(): Promise<string> {
-  if (import.meta.env.DEV) return (await import('libarchive.js/dist/worker-bundle.js?url')).default;
-  return new URL('libarchive/worker-bundle.js', document.baseURI).href;
-}
-
+// unrar oficial compilado a WASM. libarchive.js cortaba algunos RAR5 válidos a mitad del archivo
+// (errores sin mensaje desde la entrada ~78), y la subida fallaba en silencio.
 export async function extractRar(file: File): Promise<Extraction> {
-  const { Archive } = await import('libarchive.js');
-  Archive.init({ workerUrl: await workerUrl() });
-  const reader = await Archive.open(file);
-  let items: { path: string; entry: { extract(): Promise<File> } }[];
-  try {
-    const all: { path: string; entry: { extract(): Promise<File> } }[] = (await reader.getFilesArray()).map(
-    (e: { path: string; file: { name: string; extract(): Promise<File> } }) => ({
-      path: e.path + e.file.name,
-      entry: e.file,
-    }),
-  );
-    items = all.filter((i) => isImageEntry(i.path)).sort((a, b) => naturalCompare(a.path, b.path));
-  } catch (e) {
-    await reader.close();
-    throw e;
-  }
+  const [data, wasmBinary] = await Promise.all([file.arrayBuffer(), fetch(wasmUrl).then((r) => r.arrayBuffer())]);
+  const ex = await createExtractorFromData({ data, wasmBinary });
+  const paths = [...ex.getFileList().fileHeaders]
+    .filter((h) => !h.flags.directory && isImageEntry(h.name))
+    .map((h) => h.name)
+    .sort(naturalCompare);
+  const indexOf = new Map(paths.map((p, i) => [p, i]));
 
+  // Una sola pasada en el orden del archivo (en un RAR sólido, extraer de a uno descomprimiría todo cada vez).
+  // Las páginas salen en ese orden con su índice ya ordenado: la subida no necesita recibirlas en orden.
   async function* gen(): AsyncGenerator<Page> {
-    for (let index = 0; index < items.length; index++) {
-      const f = await items[index].entry.extract();
-      yield { index, blob: new Blob([f], { type: imageMime(items[index].path) }) };
+    const { files } = ex.extract({ files: (h) => indexOf.has(h.name) });
+    for (const f of files) {
+      if (!f.extraction) throw new Error(`No se pudo extraer ${f.fileHeader.name}`);
+      yield { index: indexOf.get(f.fileHeader.name)!, blob: new Blob([f.extraction as Uint8Array<ArrayBuffer>], { type: imageMime(f.fileHeader.name) }) };
     }
   }
-  return { total: items.length, pages: withCleanup(gen(), () => reader.close()) };
+  return { total: paths.length, pages: gen() };
 }

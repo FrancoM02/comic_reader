@@ -22,7 +22,7 @@ Corré `npm run dev` y abrí `http://localhost:5173/#/dev/extract` (la página s
 - [ ] **PDF:** elegí un PDF. **Criterio:** una miniatura por página, en orden.
 - [ ] **Miniaturas:** en todos los casos las miniaturas se ven nítidas y con la proporción correcta (esto cubre `makeThumb`, que no se puede probar en jsdom).
 - [ ] **Formato no soportado:** elegí un archivo `.txt`. **Criterio:** aparece "Error: Formato no soportado".
-- [ ] **RAR en build de producción:** `#/dev/extract` solo prueba la rama de desarrollo del worker. Corré `npm run build && npm run preview` (o probá en el sitio desplegado, cuando la subida de la sección (b) esté publicada) con un CBR RAR4 y uno RAR5. **Criterio:** se extraen con la cantidad y orden correctos (el worker y el .wasm se sirven desde `libarchive/`).
+- [ ] **RAR en build de producción:** Corré `npm run build && npm run preview` (o probá en el sitio desplegado, cuando la subida de la sección (b) esté publicada) con un CBR RAR4 y uno RAR5. **Criterio:** se extraen con la cantidad y orden correctos (se usa node-unrar-js; el `unrar-*.wasm` se sirve desde `assets/`).
 
 ### Interfaz nueva
 
