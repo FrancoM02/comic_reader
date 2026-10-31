@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { flushSync } from 'preact/compat';
+import { useRef, useState } from 'preact/hooks';
 import { continueReading, filterSeries, sortVolumes, unreadCount, volumeName } from '../lib/library-view';
 import { IconClose, IconDots, IconLogout, IconPlus, IconSearch } from './icons';
 import { Menu, useWide } from './kit';
@@ -10,6 +11,8 @@ export function Home({ extra, onSignOut }: { extra?: preact.ComponentChildren; o
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [menu, setMenu] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const empty = !!lib && lib.series.length === 0;
   const cont = lib ? continueReading(lib, prog) : [];
   const shown = lib ? filterSeries(lib.series, query) : [];
   const search = (
@@ -20,7 +23,7 @@ export function Home({ extra, onSignOut }: { extra?: preact.ComponentChildren; o
       aria-label="Buscar serie"
       value={query}
       onInput={(e) => setQuery(e.currentTarget.value)}
-      autoFocus={!wide}
+      ref={searchRef}
     />
   );
   return (
@@ -29,10 +32,12 @@ export function Home({ extra, onSignOut }: { extra?: preact.ComponentChildren; o
         {wide ? (
           <>
             <h1>Biblioteca</h1>
-            {search}
-            <a class="btn primary" href="#/upload">
-              Subir
-            </a>
+            {!empty && search}
+            {!empty && (
+              <a class="btn primary" href="#/upload">
+                Subir
+              </a>
+            )}
           </>
         ) : (
           <>
@@ -42,8 +47,12 @@ export function Home({ extra, onSignOut }: { extra?: preact.ComponentChildren; o
               class="icon-btn"
               aria-label={searching ? 'Cerrar búsqueda' : 'Buscar'}
               onClick={() => {
-                setSearching(!searching);
-                setQuery('');
+                // Render síncrono y foco dentro del gesto del toque: si no, iOS no sube el teclado.
+                flushSync(() => {
+                  setSearching(!searching);
+                  setQuery('');
+                });
+                searchRef.current?.focus();
               }}
             >
               {searching ? <IconClose /> : <IconSearch />}
@@ -121,8 +130,12 @@ export function Home({ extra, onSignOut }: { extra?: preact.ComponentChildren; o
               return (
                 <a class="cover" key={s.id} href={`#/series/${s.id}`}>
                   {first ? <Thumb fileId={first.thumbFileId} alt="" /> : <div class="thumb-ph" />}
-                  {unread > 0 && <span class="badge">{unread}</span>}
                   <span class="cover-title ellipsis">{s.name}</span>
+                  {unread > 0 && (
+                    <span class="badge" role="img" aria-label={`${unread} sin leer`}>
+                      {unread}
+                    </span>
+                  )}
                 </a>
               );
             })}

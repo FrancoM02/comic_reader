@@ -24,7 +24,7 @@ function useLayer(ref: RefObject<HTMLElement | null>, onEsc: () => void) {
     const me = {};
     layers.push(me);
     const before = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('input, button')?.focus();
+    (ref.current?.querySelector<HTMLElement>('input, [data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('button'))?.focus();
     const f = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
@@ -62,6 +62,7 @@ function Dialog({ opts, done }: { opts: DialogOpts; done: (action: string | null
   const cancel = () => done(null, text);
   useLayer(ref, cancel);
   const primary = opts.actions.find((a) => a.kind === 'primary');
+  const danger = opts.actions.some((a) => a.kind === 'danger');
   return (
     <div class="backdrop" onClick={outside(cancel)}>
       <div ref={ref} class="dialog" role="dialog" aria-modal="true" aria-label={opts.title}>
@@ -89,7 +90,7 @@ function Dialog({ opts, done }: { opts: DialogOpts; done: (action: string | null
               {a.label}
             </button>
           ))}
-          <button type="button" class="btn ghost" onClick={cancel}>
+          <button type="button" class="btn ghost" data-autofocus={danger ? '' : undefined} onClick={cancel}>
             Cancelar
           </button>
         </div>
@@ -157,11 +158,11 @@ function MenuPanel({ onClose, title, items, children, anchor }: MenuProps) {
     <div class={drop ? 'backdrop clear' : 'backdrop'} onClick={outside(onClose)}>
       <div ref={ref} class={drop ? 'dropdown' : wide ? 'dialog' : 'sheet'} role="menu" aria-label={title} style={style}>
         {title && <div class="menu-title ellipsis">{title}</div>}
-        {items?.map((it) => (
+        {items?.map((it, i) => (
           <button
             type="button"
             role="menuitem"
-            key={it.label}
+            key={i}
             class={it.danger ? 'menu-item danger' : 'menu-item'}
             onClick={() => {
               it.onSelect();

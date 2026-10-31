@@ -106,7 +106,7 @@ export function SeriesView({ id }: { id: string }) {
   const delVolume = async (v: Volume) => {
     const r = await ask({
       title: 'Borrar tomo',
-      message: `¿Borrar ${series.name} ${v.label}? No se puede deshacer.`,
+      message: `¿Borrar ${series.name} ${volumeName(v.label)}? No se puede deshacer.`,
       actions: [{ label: 'Borrar', value: 'del', kind: 'danger' }],
     });
     if (r.action) run(() => deleteVolume(v.id, session));
@@ -153,9 +153,7 @@ export function SeriesView({ id }: { id: string }) {
             <div class="series-info">
               <h1>{series.name}</h1>
               <p class="series-meta">
-                {series.kind === 'manga'
-                  ? `Manga · ${volumes.length} ${volumes.length === 1 ? 'tomo' : 'tomos'} · ${readCount} ${readCount === 1 ? 'leído' : 'leídos'}`
-                  : 'Cómic'}
+                {`${series.kind === 'manga' ? 'Manga' : 'Cómic'} · ${volumes.length} ${volumes.length === 1 ? 'tomo' : 'tomos'} · ${readCount} ${readCount === 1 ? 'leído' : 'leídos'}`}
               </p>
               <div class="chips">
                 <button type="button" class="chip" onClick={openSettings}>

@@ -98,6 +98,10 @@ const store: Store = {
   },
 };
 
+// El token falso no debe quedar en el navegador: se devuelve el anterior al salir de la página (recarga incluida).
+const prevToken = localStorage.getItem('cr.token');
+addEventListener('pagehide', () => (prevToken === null ? localStorage.removeItem('cr.token') : localStorage.setItem('cr.token', prevToken)));
+
 export function DevMock() {
   localStorage.setItem('cr.token', JSON.stringify({ accessToken: 'dev', expiresAt: Date.now() + 3600_000 }));
   location.hash = '#/';

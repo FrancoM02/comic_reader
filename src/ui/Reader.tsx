@@ -117,7 +117,7 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
       else if (!vertical && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
         go((e.key === 'ArrowLeft') === (series.dir === 'rtl') ? 1 : -1);
-      } else if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) toggleFullscreen();
+      } else if ((e.key === 'f' || e.key === 'F') && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) toggleFullscreen();
     };
     addEventListener('keydown', f);
     return () => removeEventListener('keydown', f);
@@ -336,7 +336,7 @@ function ReaderView({ lib, volume, series, onSeries }: { lib: Library; volume: V
               {rtl ? curNum : totalNum}
               {volLink(nextVol, 'Tomo siguiente', <IconNext size={20} />)}
             </div>
-            {wide ? <p class="reader-hint">← → páginas · F pantalla completa · Esc volver</p> : quick}
+            {wide ? <p class="reader-hint">← → páginas{document.fullscreenEnabled ? ' · F pantalla completa' : ''} · Esc volver</p> : quick}
             {sync.unsaved && <p role="status" class="notice">Progreso sin guardar</p>}
             {menuError && <p role="alert" class="notice">{menuError}</p>}
           </div>

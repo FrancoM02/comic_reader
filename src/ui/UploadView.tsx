@@ -117,6 +117,7 @@ export function UploadView({ cleaned = [] }: { cleaned?: string[] }) {
     } finally {
       setBusy(false);
       setRunning(false);
+      setWait(false);
     }
   }
 

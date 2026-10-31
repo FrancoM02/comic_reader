@@ -153,3 +153,33 @@ test('SeriesView muestra el porcentaje leído', async () => {
   );
   expect(await screen.findByText('50%')).toBeTruthy();
 });
+
+test('el aviso de esperar no se arrastra al siguiente lote', async () => {
+  let release = () => {};
+  vi.mocked(uploadVolume).mockImplementationOnce(() => new Promise((r) => (release = () => r({} as never))));
+  await renderWith(['A v01.cbz']);
+  const subirBtn = () => screen.getByRole('button', { name: /^(Subir \d+ archivos?|Subiendo.*)$/ });
+  await act(async () => {
+    fireEvent.click(subirBtn());
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Volver' }));
+  expect(screen.getByText('Esperá a que termine la subida')).toBeTruthy();
+  await act(async () => {
+    release();
+  });
+  await waitFor(() => expect(screen.queryByText(/^Subiendo/)).toBeNull());
+  // Segundo lote: el tomo anterior ya quedó subido, se agrega otro.
+  const input = document.querySelector('input[type=file]') as HTMLInputElement;
+  Object.defineProperty(input, 'files', { value: [new File(['z'], 'A v02.cbz')], configurable: true });
+  await act(async () => {
+    fireEvent.change(input);
+  });
+  vi.mocked(uploadVolume).mockImplementationOnce(() => new Promise((r) => (release = () => r({} as never))));
+  await act(async () => {
+    fireEvent.click(subirBtn());
+  });
+  expect(screen.queryByText('Esperá a que termine la subida')).toBeNull();
+  await act(async () => {
+    release();
+  });
+});

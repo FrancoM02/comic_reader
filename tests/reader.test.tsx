@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { setDoublePref } from '../src/lib/prefs';
 import { SessionContext } from '../src/session';
@@ -122,6 +122,29 @@ test('F alterna pantalla completa', async () => {
   expect(requestFullscreen).toHaveBeenCalledTimes(1);
   await openMenu();
   expect(screen.getByLabelText('Pantalla completa')).toBeTruthy();
+});
+
+test('F mantenida (auto-repetición) alterna una sola vez', async () => {
+  Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+  const requestFullscreen = vi.fn(async () => {});
+  document.documentElement.requestFullscreen = requestFullscreen;
+  renderReader();
+  await screen.findByAltText('Página 3');
+  fireEvent.keyDown(window, { key: 'f' });
+  fireEvent.keyDown(window, { key: 'f', repeat: true });
+  expect(requestFullscreen).toHaveBeenCalledTimes(1);
+});
+
+test('la ayuda de PC solo menciona F si hay pantalla completa', async () => {
+  innerWidth = 1280;
+  for (const enabled of [true, false]) {
+    Object.defineProperty(document, 'fullscreenEnabled', { value: enabled, configurable: true });
+    renderReader();
+    await screen.findByAltText('Página 3');
+    await openMenu();
+    expect(document.querySelector('.reader-hint')!.textContent!.includes('F pantalla completa')).toBe(enabled);
+    cleanup();
+  }
 });
 
 test('sin pantalla completa disponible no hay botón', async () => {

@@ -44,6 +44,7 @@ test('muestra los sin leer en la portada', async () => {
   renderHome(lib([serie('a', 'Batman')], [tomo('v1', 'a', 1), tomo('v2', 'a', 2), tomo('v3', 'a', 3)]), progress);
   const cover = (await screen.findByText('Batman')).closest('a')!;
   expect(cover.querySelector('.badge')!.textContent).toBe('2');
+  expect(screen.getByRole('link', { name: /^Batman\s*2 sin leer$/ })).toBe(cover);
 });
 
 test('biblioteca vacía invita a subir', async () => {
@@ -77,4 +78,25 @@ test('en celular Salir está en el menú ⋮', async () => {
   expect(screen.queryByText('Salir')).toBeNull();
   fireEvent.click(screen.getByLabelText('Más opciones'));
   await waitFor(() => expect(screen.getByText('Salir')).toBeTruthy());
+});
+
+test('biblioteca vacía en PC no muestra buscador ni Subir en la barra', async () => {
+  innerWidth = 1280;
+  dispatchEvent(new Event('resize'));
+  renderHome(lib([]));
+  await screen.findByText('Subí tu primer cómic');
+  expect(screen.queryByLabelText('Buscar serie')).toBeNull();
+  expect(screen.getAllByRole('link', { name: 'Subir' })).toHaveLength(1);
+});
+
+test('en celular la lupa abre el buscador con foco, cada vez', async () => {
+  innerWidth = 375;
+  dispatchEvent(new Event('resize'));
+  renderHome(lib([serie('a', 'Berserk')]));
+  await screen.findByText('Berserk');
+  for (let i = 0; i < 2; i++) {
+    fireEvent.click(screen.getByLabelText('Buscar'));
+    expect(document.activeElement).toBe(screen.getByLabelText('Buscar serie'));
+    fireEvent.click(screen.getByLabelText('Cerrar búsqueda'));
+  }
 });

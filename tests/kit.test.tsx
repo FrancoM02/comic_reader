@@ -24,8 +24,8 @@ async function openDialog(opts: DialogOpts) {
 
 test('useDialog: Esc cancela', async () => {
   const onResult = await openDialog(confirmOpts);
-  // El foco inicial queda en la primera acción.
-  expect(document.activeElement?.textContent).toBe('Borrar');
+  // Con una acción destructiva el foco inicial queda en Cancelar.
+  expect(document.activeElement?.textContent).toBe('Cancelar');
   await act(async () => {
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
   });
@@ -116,4 +116,27 @@ test('Menu: en PC con ancla se posiciona como desplegable bajo el botón', () =>
   expect(menu.className).toBe('dropdown');
   expect(menu.style.top).toBe('50px');
   expect(menu.style.right).toBe(`${innerWidth - 940}px`);
+});
+
+test('useDialog: sin acción destructiva el foco inicial queda en la primera acción', async () => {
+  await openDialog({ title: 'Mover', actions: [{ label: 'Mover', value: 'ok', kind: 'primary' }] });
+  expect(document.activeElement?.textContent).toBe('Mover');
+});
+
+test('Menu: ítems con la misma etiqueta se eligen por separado', () => {
+  const calls: string[] = [];
+  render(
+    <Menu
+      open
+      onClose={() => {}}
+      items={[
+        { label: 'Batman', onSelect: () => calls.push('a') },
+        { label: 'Batman', onSelect: () => calls.push('b') },
+      ]}
+    />,
+  );
+  const items = screen.getAllByRole('menuitem');
+  expect(items).toHaveLength(2);
+  fireEvent.click(items[1]);
+  expect(calls).toEqual(['b']);
 });

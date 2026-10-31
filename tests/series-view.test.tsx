@@ -104,3 +104,20 @@ test('Tipo cómic pone izquierda a derecha', async () => {
   await waitFor(() => expect(updateLibrary).toHaveBeenCalled());
   expect(lib.series[0]).toMatchObject({ kind: 'comic', dir: 'ltr' });
 });
+
+test('el encabezado cuenta tomos y leídos, también en cómics', async () => {
+  lib.volumes = [tomo('a', 1), tomo('b', 2)];
+  const { unmount } = renderSerie({ version: 1, volumes: { a: done } });
+  expect(await screen.findByText('Manga · 2 tomos · 1 leído')).toBeTruthy();
+  unmount();
+  lib.series[0].kind = 'comic';
+  renderSerie();
+  expect(await screen.findByText('Cómic · 2 tomos · 0 leídos')).toBeTruthy();
+});
+
+test('la confirmación de borrar nombra el tomo como la lista', async () => {
+  renderSerie();
+  await abrirMenuTomo('Tomo 2');
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Borrar tomo' }));
+  expect(screen.getByText('¿Borrar Berserk Tomo 2? No se puede deshacer.')).toBeTruthy();
+});
