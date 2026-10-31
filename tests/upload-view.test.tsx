@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { setBusy, signIn, tokenMinutesLeft, usesRedirect } from '../src/auth';
 import { SessionContext } from '../src/session';
@@ -24,15 +24,15 @@ const lib: Library = {
   series: [{ id: 'S', name: 'Batman', kind: 'comic', dir: 'ltr', mode: 'paged', createdAt: 0 }],
   volumes: [],
 };
-const session = () => ({
+const session = (l: Library = lib) => ({
   drive: { downloadBlob: async () => new Blob() } as never,
-  store: { loadLibrary: async () => lib, loadProgress: async () => ({ version: 1, volumes: {} }) } as never,
+  store: { loadLibrary: async () => l, loadProgress: async () => ({ version: 1, volumes: {} }) } as never,
   volumesId: 'v',
 });
 
-async function renderWith(names: string[]) {
+async function renderWith(names: string[], l: Library = lib) {
   render(
-    <SessionContext.Provider value={session()}>
+    <SessionContext.Provider value={session(l)}>
       <UploadView />
     </SessionContext.Provider>,
   );
@@ -44,10 +44,11 @@ async function renderWith(names: string[]) {
 }
 async function subir() {
   await act(async () => {
-    fireEvent.click(screen.getByText('Subir', { selector: 'button' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Subir \d+ archivos?$/ }));
   });
-  await waitFor(() => expect(screen.queryByText('Subiendo…')).toBeNull());
+  await waitFor(() => expect(screen.queryByText(/^Subiendo/)).toBeNull());
 }
+const editAll = () => screen.getAllByRole('button', { name: /^Editar / }).forEach((b) => fireEvent.click(b));
 const labels = () => vi.mocked(uploadVolume).mock.calls.map((c) => c[0].label);
 
 beforeEach(() => {
@@ -60,6 +61,7 @@ beforeEach(() => {
 
 test('la etiqueta sale del número editado y del tipo de la serie (existente o nueva)', async () => {
   await renderWith(['Berserk v01.cbz', 'Batman 5.cbz', 'Suelto.cbz']);
+  editAll();
   const nums = Array.from(document.querySelectorAll('input[type=number]')) as HTMLInputElement[];
   fireEvent.input(nums[0], { target: { value: '3' } }); // serie nueva, manga (por defecto)
   fireEvent.input(nums[1], { target: { value: '12' } }); // serie existente, cómic
@@ -94,6 +96,41 @@ test('con redirección o con token de sobra no pide renovar', async () => {
   await subir();
   expect(signIn).not.toHaveBeenCalled();
   expect(uploadVolume).toHaveBeenCalledTimes(1);
+});
+
+test('el botón dice cuántos archivos sube', async () => {
+  await renderWith(['A v01.cbz']);
+  expect(screen.getByRole('button', { name: 'Subir 1 archivo' })).toBeTruthy();
+  const input = document.querySelector('input[type=file]') as HTMLInputElement;
+  Object.defineProperty(input, 'files', { value: [new File(['z'], 'A v02.cbz')], configurable: true });
+  await act(async () => {
+    fireEvent.change(input);
+  });
+  expect(screen.getByRole('button', { name: 'Subir 2 archivos' })).toBeTruthy();
+});
+
+test('duplicado usa el diálogo', async () => {
+  const l: Library = {
+    ...lib,
+    volumes: [{ id: 'V1', seriesId: 'S', number: 1, label: '#001', pageCount: 10, folderId: 'f', pageFileIds: [], thumbFileId: 't', uploadedAt: 0 }],
+  };
+  await renderWith(['Batman 001.cbz'], l);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /^Subir \d+ archivos?$/ }));
+  });
+  const dialog = await screen.findByRole('dialog');
+  expect(uploadVolume).not.toHaveBeenCalled();
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reemplazar' }));
+  });
+  await waitFor(() => expect(uploadVolume).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(uploadVolume).mock.calls[0][0].replaceVolumeId).toBe('V1');
+});
+
+test('serie vacía abre la tarjeta y bloquea Subir', async () => {
+  await renderWith(['#1.cbz']); // el nombre no trae serie
+  expect(screen.getByLabelText('Serie')).toBeTruthy();
+  expect((screen.getByRole('button', { name: /^Subir \d+ archivos?$/ }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 test('SeriesView muestra el porcentaje leído', async () => {

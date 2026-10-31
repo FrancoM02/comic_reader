@@ -547,3 +547,52 @@ button:not([class]):not([role]),
 .reader-bottom { padding-bottom: calc(var(--s3) + var(--safe-b)); }
 .reader-bottom label { display: flex; flex-direction: column; gap: var(--s2); }
 .reader-bottom input[type='range'] { width: 100%; }
+
+/* ============ Subir ============ */
+.dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s6) var(--s4);
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  text-align: center;
+  cursor: pointer;
+}
+.dropzone strong { color: var(--fg); }
+.dropzone:focus-within { border-color: var(--accent); }
+/* Oculto a la vista pero en el DOM y enfocable (display:none lo sacaría del teclado y de los lectores). */
+.dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.up-list { list-style: none; margin: var(--s4) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--s3); }
+.up-card { display: flex; flex-direction: column; gap: var(--s2); }
+.up-head { display: flex; align-items: center; gap: var(--s2); }
+.up-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.up-title { display: flex; align-items: center; gap: var(--s2); font-weight: 600; min-width: 0; }
+.up-missing { color: var(--danger-fg); }
+.up-sub { font-size: 0.9rem; color: var(--muted-2); }
+.up-file { font-size: 0.8rem; color: var(--muted); }
+.up-state { flex: none; font-size: 0.85rem; color: var(--muted); }
+.up-state.ok { color: #6fcf8f; }
+.tag { flex: none; padding: 0 6px; border-radius: 4px; background: rgba(79, 140, 255, 0.18); color: var(--accent); font-size: 0.72rem; font-weight: 600; }
+.up-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
+.up-fields label { display: flex; flex-direction: column; gap: 6px; color: var(--muted-2); font-size: 0.85rem; }
+.up-card .notice { margin: 0; }
+.up-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  padding: var(--s3) calc(var(--s4) + var(--safe-r)) calc(var(--s3) + var(--safe-b)) calc(var(--s4) + var(--safe-l));
+  background: rgba(18, 18, 18, 0.94);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+}
+.up-bar .btn { display: flex; width: 100%; max-width: 520px; margin: 0 auto; }
+@media (min-width: 900px) {
+  .up-bar { left: var(--sidebar); }
+}
